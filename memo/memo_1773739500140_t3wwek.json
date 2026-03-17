@@ -1,0 +1,24 @@
+{
+  "id": "memo_1773739500140_t3wwek",
+  "name": "备忘录 01",
+  "entries": [
+    {
+      "text": "它只服务一个目标：让特定流量的人，完成特定动作。",
+      "sourcePath": "Skill | skill/step1-test/gpt5.4.md | H2#2 1. 落地页调研的本质"
+    },
+    {
+      "text": "相比竞品或替代方案，您认为自己最硬的1-2个差异化优势是什么？",
+      "sourcePath": "Skill | skill/step1-test/claude-opus-4.6.md | H1#4 具体方案：客户需求调研（共7组问题）"
+    },
+    {
+      "text": "我只问客户脑子里有、但我无法推断的信息。",
+      "sourcePath": "Skill | skill/step1-test/claude-opus-4.6.md | H2#3 提问原则"
+    },
+    {
+      "text": "落地页的本质是**「流量意图」与「转化动作」之间的最短路径**。",
+      "sourcePath": "Skill | skill/step1-test/claude-opus-4.6.md | H2#2 核心逻辑"
+    }
+  ],
+  "createdAt": "2026-03-17T09:25:00.140Z",
+  "updatedAt": "2026-03-17T12:59:57.985Z"
+}

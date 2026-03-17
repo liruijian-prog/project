@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "sourcePath": "C:\\Users\\boboy\\Desktop\\lab\\skill-reader\\batch-ask\\20260317-201634-2\\02-bytedance-seed-seed-2.0-mini.md",
+  "updatedAt": "2026-03-17T12:18:13.840Z",
+  "blocks": {
+    "h1-2e0efce233357e00": {
+      "text": "## bytedance-seed/seed-2.0-mini 文档解读\n\n**核心作用**  \n这是一个字节跳动的 Seed 2.0 Mini 模型的执行记录条目。记录了该 AI Skill 在特定时间点的成功执行状态。\n\n**重要性**  \n作为执行日志的一部分，它提供了模型调用的可追溯性和状态验证。成功状态确认了该 Skill 在指定时间点可正常工作。\n\n**关键点**  \n时间戳显示为未来日期（2026年），可能是测试数据或时区配置问题，实际使用时需核实真实执行时间。状态为 success 表明无需额外的错误处理。",
+      "heading": "bytedance-seed/seed-2.0-mini",
+      "type": "h1",
+      "updatedAt": "2026-03-17T12:18:13.840Z"
+    }
+  }
+}

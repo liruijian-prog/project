@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Virtual environment
+.markitdown-venv/
+
+# Generated markdown files (converted from docx/pdf)
+skill/**/*.md
+!skill/README.md
+
+# Cache files
+.DS_Store
+*.log
+
+# Environment variables
+.env
+.env.local

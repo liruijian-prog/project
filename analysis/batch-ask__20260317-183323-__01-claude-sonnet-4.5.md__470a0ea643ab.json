@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "sourcePath": "C:\\Users\\boboy\\Desktop\\lab\\skill-reader\\batch-ask\\20260317-183323-如果你是落地页制作专家-现在你需要为客户制作一个落地页-不是一个普通的标准-而是要达到客户惊艳的\\01-claude-sonnet-4.5.md",
+  "updatedAt": "2026-03-17T10:34:23.712Z",
+  "blocks": {
+    "h1-f9af5cdcc79558bf": {
+      "text": "# Claude-Sonnet-4.5 文档解读\n\n**核心作用**\n记录 Claude Sonnet 4.5 模型的运行状态快照，标注该 Skill 在特定时间点的执行结果。\n\n**重要性**\n状态字段是判断 Skill 是否正常运行的关键依据，`error` 状态直接表明该次执行存在异常，需要排查。\n\n**关键点**\n当前状态为 `error`，需追溯 2026-03-17T10:33:23.565Z 时间点的日志以定位具体错误原因，避免直接依赖此 Skill 的输出结果。",
+      "heading": "Claude-Sonnet-4.5",
+      "type": "h1",
+      "updatedAt": "2026-03-17T10:33:59.016Z"
+    },
+    "h2-ace71b118b280d33": {
+      "text": "# Skill 文档解读：01-claude-sonnet-4.5 / 问题\n\n**核心作用**\n定义一个落地页制作前的客户需求调查场景，要求 AI 扮演专家角色，通过精准提",
+      "heading": "问题",
+      "type": "h2",
+      "updatedAt": "2026-03-17T10:34:17.777Z"
+    },
+    "h2-fce6a66d9e0a029b": {
+      "text": "# Skill 文档解读：01-claude-sonnet-4.5 — 错误\n\n**核心作用**\n该段落记录了一个网络请求失败的错误信息",
+      "heading": "错误",
+      "type": "h2",
+      "updatedAt": "2026-03-17T10:34:23.712Z"
+    }
+  }
+}

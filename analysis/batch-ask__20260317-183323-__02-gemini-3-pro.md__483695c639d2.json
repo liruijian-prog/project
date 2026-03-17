@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "sourcePath": "C:\\Users\\boboy\\Desktop\\lab\\skill-reader\\batch-ask\\20260317-183323-如果你是落地页制作专家-现在你需要为客户制作一个落地页-不是一个普通的标准-而是要达到客户惊艳的\\02-gemini-3-pro.md",
+  "updatedAt": "2026-03-17T10:34:31.066Z",
+  "blocks": {
+    "h1-465139f07759c59c": {
+      "text": "# Gemini-3-Pro 文档解读\n\n**核心作用**\n记录 Gemini-3-Pro 这一 AI Skill 的执行元数据，包含运行时间戳与状态标识，用于追踪该技能的调用结果。\n\n**重要性**\n状态字段（error）是判断 Skill 是否正常运行的关键依据，缺少此记录则无法进行故障排",
+      "heading": "Gemini-3-Pro",
+      "type": "h1",
+      "updatedAt": "2026-03-17T10:34:18.781Z"
+    },
+    "h2-ace71b118b280d33": {
+      "text": "#",
+      "heading": "问题",
+      "type": "h2",
+      "updatedAt": "2026-03-17T10:34:23.252Z"
+    },
+    "h2-fce6a66d9e0a029b": {
+      "text": "# Skill 文档解读：02-gemini-3-pro / 错误\n\n**核心作用**\n记录该 Skill 在执行过程中遭遇的运行时错误，当前错误信息为 `",
+      "heading": "错误",
+      "type": "h2",
+      "updatedAt": "2026-03-17T10:34:31.066Z"
+    }
+  }
+}

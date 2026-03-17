@@ -1,0 +1,11 @@
+{
+  "runId": "20260317-221847-4",
+  "question": "内生增长模型的几个经典模型",
+  "models": [
+    "gemini-3.1-pro",
+    "claude-opus-4.6",
+    "grok-4.20-multi-agent",
+    "deepseek-r1"
+  ],
+  "createdAt": "2026-03-17T14:18:47.923Z"
+}

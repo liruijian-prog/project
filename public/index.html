@@ -1,0 +1,4139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Markdown Reader</title>
+<link rel="icon" href="/favicon.ico?v=20260317-3" type="image/x-icon">
+<link rel="shortcut icon" href="/favicon.ico?v=20260317-3" type="image/x-icon">
+<script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
+<style>
+/* ── Reset & Tokens ──────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:            #0d1117;
+  --bg-raised:     #161b22;
+  --bg-overlay:    #1c2128;
+  --border:        #30363d;
+  --border-subtle: #21262d;
+
+  --text:          #e6edf3;
+  --text-muted:    #8b949e;
+  --text-dim:      #484f58;
+
+  --blue:          #58a6ff;
+  --blue-bg:       rgba(56,139,253,.12);
+  --blue-border:   rgba(56,139,253,.4);
+  --green:         #3fb950;
+  --green-bg:      rgba(63,185,80,.12);
+  --yellow:        #e3b341;
+  --yellow-bg:     rgba(227,179,65,.12);
+  --purple:        #d2a8ff;
+  --purple-bg:     rgba(210,168,255,.12);
+
+  --radius:        8px;
+  --sidebar-w:     268px;
+  --analysis-w:    50%;
+}
+
+[data-theme="light"] {
+  --bg:            #f5f7fa;
+  --bg-raised:     #ffffff;
+  --bg-overlay:    #eaeff5;
+  --border:        #cdd5de;
+  --border-subtle: #d8e0e8;
+  --text:          #1c2128;
+  --text-muted:    #545d68;
+  --text-dim:      #8b95a1;
+
+  --blue:          #1a6fef;
+  --blue-bg:       #e6f0fd;
+  --blue-border:   #a8c8f8;
+  --green:         #1c8c3e;
+  --green-bg:      #e2f5ea;
+  --yellow:        #c98000;
+  --yellow-bg:     #fdf0d0;
+  --purple:        #6f41e8;
+  --purple-bg:     #ece8fd;
+}
+
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Top bar ─────────────────────────────────────────────── */
+#topbar {
+  height: 44px;
+  min-height: 44px;
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  z-index: 10;
+}
+
+.topbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+  letter-spacing: -.3px;
+}
+
+.topbar-logo span { color: var(--blue); }
+
+#topbar-file {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 2px 8px;
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-status {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#btn-memo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 220px;
+  padding: 0 9px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s, transform .15s;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+#btn-memo:hover,
+#btn-memo.active {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+}
+#btn-memo:active { transform: translateY(1px); }
+
+.memo-pill {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .45;
+  flex-shrink: 0;
+}
+
+#memo-current-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+#memo-current-count {
+  color: var(--text-dim);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+/* ── Main layout ─────────────────────────────────────────── */
+#layout {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────── */
+#sidebar {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  background: var(--bg-raised);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#sidebar-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-header {
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .7px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* Sidebar tabs */
+#sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.stab {
+  flex: 1;
+  padding: 8px;
+  font-size: 12px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: color .15s, border-color .15s;
+  font-family: inherit;
+}
+.stab:hover { color: var(--text); }
+.stab.active { border-bottom-color: var(--blue); color: var(--text); }
+
+#bm-count {
+  display: inline-block;
+  background: var(--blue-bg);
+  color: var(--blue);
+  border-radius: 8px;
+  font-size: 10px;
+  padding: 0 5px;
+  min-width: 16px;
+  text-align: center;
+  font-weight: 700;
+}
+#bm-count:empty { display: none; }
+
+#tab-tree {
+  overflow-y: auto;
+  flex: 1;
+  padding: 6px 0;
+}
+
+#tab-bookmarks {
+  overflow-y: auto;
+  flex: 1;
+  padding: 6px 0;
+}
+
+/* Bookmarks list */
+.bm-group { margin-bottom: 4px; }
+
+.bm-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+.bm-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 24px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-radius: 5px;
+  margin: 1px 6px;
+  transition: background .12s, color .12s;
+}
+.bm-item:hover { background: rgba(255,255,255,.05); color: var(--text); }
+[data-theme="light"] .bm-item:hover { background: rgba(0,0,0,.05); }
+
+.bm-item-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.bm-del {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-dim);
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color .12s;
+}
+.bm-del:hover { color: #f85149; }
+
+.bm-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+#skill-tree {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 0 12px;
+}
+
+#sidebar-action-dock {
+  position: relative;
+  padding: 10px;
+  border-top: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--bg-raised) 82%, var(--bg-overlay) 18%);
+}
+
+#sidebar-action-dock-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 8px;
+}
+
+#btn-sidebar-action,
+#btn-sidebar-action-switch {
+  border: 1px solid var(--border-subtle);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s, transform .15s;
+  font-family: inherit;
+}
+
+#btn-sidebar-action {
+  min-width: 0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+#btn-sidebar-action:hover,
+#btn-sidebar-action-switch:hover,
+#btn-sidebar-action-switch.active {
+  border-color: var(--border);
+  background: var(--bg-overlay);
+}
+
+#btn-sidebar-action:active,
+#btn-sidebar-action-switch:active {
+  transform: translateY(1px);
+}
+
+.sidebar-action-copy {
+  display: block;
+  min-width: 0;
+}
+
+#sidebar-action-label {
+  font-size: 12.5px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#btn-sidebar-action-switch {
+  width: 34px;
+  height: 100%;
+  min-height: 42px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+#sidebar-action-menu {
+  display: none;
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: calc(100% + 8px);
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-raised);
+  box-shadow: 0 18px 36px rgba(0,0,0,.28);
+  z-index: 80;
+}
+
+#sidebar-action-menu.open {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar-action-item {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  padding: 10px 11px;
+  transition: border-color .15s, background .15s;
+}
+
+.sidebar-action-item:hover {
+  border-color: var(--border-subtle);
+  background: var(--bg-overlay);
+}
+
+.sidebar-action-item.active {
+  border-color: var(--blue-border);
+  background: var(--blue-bg);
+}
+
+.sidebar-action-item strong {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Tree nodes */
+.tree-dir { }
+
+.tree-dir-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 12px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--text);
+  border-radius: 5px;
+  margin: 1px 6px;
+  transition: background .12s;
+  user-select: none;
+}
+.tree-dir-header:hover { background: rgba(255,255,255,.06); }
+[data-theme="light"] .tree-dir-header:hover { background: rgba(0,0,0,.05); }
+
+.chevron {
+  color: var(--text-muted);
+  font-size: 10px;
+  transition: transform .15s;
+  width: 10px;
+  flex-shrink: 0;
+}
+.tree-dir.collapsed .chevron { transform: rotate(-90deg); }
+
+.tree-dir-children { padding-left: 14px; }
+.tree-dir-children.hidden { display: none; }
+
+.tree-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 12px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  border-radius: 5px;
+  margin: 1px 6px;
+  transition: all .12s;
+}
+.tree-file:hover { background: rgba(255,255,255,.05); color: var(--text); }
+[data-theme="light"] .tree-file:hover { background: rgba(0,0,0,.05); }
+.tree-file.active {
+  background: var(--blue-bg);
+  color: var(--blue);
+  border: 1px solid var(--blue-border);
+}
+
+/* ── Content area ────────────────────────────────────────── */
+#content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Content states */
+.content-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text-muted);
+}
+.content-state h2 { font-size: 18px; color: var(--text); font-weight: 600; }
+.content-state p  { font-size: 13px; }
+.content-state .spinner {
+  width: 18px;
+  height: 18px;
+  border-width: 2px;
+}
+
+/* Panes wrapper */
+#panes {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* Skill (left) pane */
+#blocks-pane {
+  flex: 1;
+  width: 50%;
+  overflow-y: auto;
+  padding: 24px 20px;
+  border-right: 1px solid var(--border);
+}
+
+.skill-heading {
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.skill-heading h1 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--blue);
+  margin-bottom: 3px;
+}
+.skill-heading .fp {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+}
+
+/* Block cards */
+.block {
+  margin-bottom: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: border-color .18s, box-shadow .18s;
+  cursor: default;
+}
+.block:hover, .block.active {
+  border-color: var(--blue-border);
+  box-shadow: 0 0 0 3px var(--blue-bg);
+}
+
+.block-bar {
+  padding: 8px 13px;
+  background: rgba(255,255,255,.025);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* Bookmark button */
+.btn-star {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 0 2px;
+  line-height: 1;
+  transition: color .15s, opacity .15s;
+  margin-left: auto;
+  flex-shrink: 0;
+  opacity: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-star svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.btn-star.starred { color: var(--yellow); opacity: 1; }
+.btn-star.starred svg { fill: currentColor; }
+.block:hover .btn-star, .block.active .btn-star { opacity: 1; }
+
+.badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  flex-shrink: 0;
+}
+.badge-meta   { background: var(--yellow-bg); color: var(--yellow); }
+.badge-h1     { background: var(--blue-bg);   color: var(--blue);   }
+.badge-h2     { background: var(--green-bg);  color: var(--green);  }
+.badge-text   { background: var(--purple-bg); color: var(--purple); }
+
+.block-body {
+  padding: 13px 14px;
+  font-size: 13.5px;
+  line-height: 1.75;
+}
+
+/* Markdown inside blocks */
+.block-body h1, .block-body h2, .block-body h3, .block-body h4 {
+  color: var(--blue);
+  margin: 12px 0 6px;
+  line-height: 1.4;
+}
+.block-body h1 { font-size: 16px; }
+.block-body h2 { font-size: 14.5px; }
+.block-body h3 { font-size: 13.5px; }
+.block-body h4 { font-size: 13px; color: var(--text-muted); }
+
+.block-body p   { margin: 5px 0; }
+.block-body ul, .block-body ol { padding-left: 20px; margin: 5px 0; }
+.block-body li  { margin: 3px 0; }
+.block-body strong { color: var(--text); }
+.block-body em     { color: var(--text-muted); }
+
+.block-body code {
+  font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-subtle);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--green);
+}
+
+.block-body pre {
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.block-body pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.block-body blockquote {
+  border-left: 3px solid var(--blue-border);
+  padding: 4px 12px;
+  color: var(--text-muted);
+  margin: 6px 0;
+  background: var(--blue-bg);
+  border-radius: 0 4px 4px 0;
+}
+
+.block-body table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 12.5px; }
+.block-body th, .block-body td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; }
+.block-body th { background: var(--bg-overlay); color: var(--text-muted); font-weight: 600; }
+
+.block-body a { color: var(--blue); text-decoration: none; }
+.block-body a:hover { text-decoration: underline; }
+
+.block-body hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+
+/* ── Analysis (right) pane ───────────────────────────────── */
+#analysis-pane {
+  width: var(--analysis-w);
+  min-width: var(--analysis-w);
+  overflow-y: auto;
+  padding: 24px 18px;
+  background: var(--bg);
+}
+
+.analysis-header {
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.analysis-card {
+  margin-bottom: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: all .22s ease;
+}
+
+.analysis-card.active {
+  border-color: var(--blue-border);
+  box-shadow: 0 0 0 3px var(--blue-bg), 0 4px 20px rgba(56,139,253,.12);
+  transform: scale(1.015);
+  z-index: 1;
+  position: relative;
+}
+
+.analysis-card-bar {
+  padding: 7px 12px;
+  background: rgba(255,255,255,.02);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+}
+
+.analysis-card-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analysis-body {
+  padding: 12px 13px;
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--text);
+}
+
+/* Markdown in analysis */
+.analysis-body h1, .analysis-body h2, .analysis-body h3 {
+  font-size: 12.5px;
+  color: var(--green);
+  margin: 8px 0 4px;
+  font-weight: 700;
+}
+.analysis-body p   { margin: 4px 0; }
+.analysis-body ul, .analysis-body ol { padding-left: 16px; margin: 4px 0; }
+.analysis-body li  { margin: 2px 0; }
+.analysis-body strong { color: var(--yellow); }
+.analysis-body em     { color: var(--text-muted); }
+.analysis-body code   {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 11.5px;
+  background: var(--bg-overlay);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--green);
+}
+
+/* Loading states */
+.loading-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 4px 0;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(255,255,255,.1);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin .75s linear infinite;
+  flex-shrink: 0;
+}
+
+[data-theme="light"] .spinner {
+  border: 2px solid rgba(0,0,0,.1);
+  border-top-color: var(--blue);
+}
+
+/* Streaming cursor */
+.cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--blue);
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  animation: blink .7s infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* Progress bar */
+#progress-bar {
+  height: 2px;
+  background: var(--blue);
+  position: fixed;
+  top: 44px;
+  left: 0;
+  z-index: 100;
+  transition: width .3s ease;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar         { width: 5px; height: 5px; }
+::-webkit-scrollbar-track   { background: transparent; }
+::-webkit-scrollbar-thumb   { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #484f58; }
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #8b95a1; }
+
+/* Analysis card refresh button */
+.btn-refresh {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-dim);
+  padding: 3px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  opacity: 0;
+  transition: color .15s, opacity .15s, background .15s;
+  flex-shrink: 0;
+}
+.btn-refresh:hover { color: var(--text); background: var(--bg-overlay); }
+.analysis-card:hover .btn-refresh { opacity: 1; }
+.btn-refresh:disabled,
+.analysis-card:hover .btn-refresh:disabled {
+  opacity: .45;
+  cursor: wait;
+  color: var(--text-dim);
+  background: none;
+}
+
+/* Regenerating indicator (shown while keeping old content) */
+.regen-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-dim);
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.regen-bar .spinner { width: 10px; height: 10px; border-width: 1.5px; }
+.regen-bar.error {
+  color: #f85149;
+  border-bottom-color: rgba(248,81,73,.2);
+}
+
+/* File tree icon states */
+.tree-file .file-icon { fill: var(--text-dim); transition: fill .15s; }
+.tree-file.analyzed .file-icon { fill: var(--text-muted); }
+.tree-file:hover .file-icon { fill: var(--text); }
+
+.tree-file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-status { flex-shrink: 0; display: flex; align-items: center; }
+.file-status .spinner { width: 10px; height: 10px; border-width: 1.5px; }
+
+/* Light mode overrides */
+[data-theme="light"] .block-bar         { background: var(--bg-overlay); }
+[data-theme="light"] .analysis-card-bar { background: var(--bg-overlay); }
+[data-theme="light"] .analysis-body strong { color: var(--blue); }
+
+/* ── Settings button & panel ─────────────────────────────── */
+#btn-settings {
+  background: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-muted);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color .15s, border-color .15s, background .15s;
+  flex-shrink: 0;
+}
+#btn-settings:hover, #btn-settings.active {
+  color: var(--text); border-color: var(--border); background: var(--bg-overlay);
+}
+
+#settings-backdrop {
+  position: fixed;
+  inset: 44px 0 0 0;
+  background: rgba(6, 10, 14, .34);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease;
+  z-index: 190;
+  backdrop-filter: blur(2px);
+}
+#settings-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#settings-panel {
+  position: fixed;
+  top: 44px;
+  right: 0;
+  bottom: 0;
+  width: min(460px, 100vw);
+  background: var(--bg-raised);
+  border-left: 1px solid var(--border);
+  box-shadow: -18px 0 44px rgba(0,0,0,.28);
+  z-index: 220;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  transform: translateX(100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform .24s cubic-bezier(.22, 1, .36, 1), opacity .18s ease;
+}
+#settings-panel.open {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#memo-backdrop {
+  position: fixed;
+  inset: 44px 0 0 0;
+  background: rgba(6, 10, 14, .34);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease;
+  z-index: 190;
+  backdrop-filter: blur(2px);
+}
+#memo-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#memo-panel {
+  position: fixed;
+  top: 44px;
+  right: 0;
+  bottom: 0;
+  width: min(720px, 100vw);
+  background: var(--bg-raised);
+  border-left: 1px solid var(--border);
+  box-shadow: -18px 0 44px rgba(0,0,0,.28);
+  z-index: 220;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  transform: translateX(100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform .24s cubic-bezier(.22, 1, .36, 1), opacity .18s ease;
+}
+#memo-panel.open {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.memo-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px 16px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--bg-raised) 86%, var(--bg-overlay) 14%);
+}
+
+.memo-panel-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.memo-panel-title strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.memo-panel-title span {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.memo-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-mini {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--bg-overlay);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.btn-mini:hover {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--bg-overlay) 80%, var(--blue) 20%);
+}
+.btn-mini:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+  background: var(--bg-overlay);
+  border-color: var(--border-subtle);
+}
+
+.btn-icon-mini {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--bg-overlay);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  transition: border-color .15s, background .15s, color .15s;
+}
+
+.btn-icon-mini:hover {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--bg-overlay) 84%, var(--blue) 16%);
+  color: var(--text);
+}
+
+.memo-panel-sub {
+  padding: 12px 14px;
+  color: var(--text-muted);
+  font-size: 11px;
+  border-right: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.memo-panel-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 240px) minmax(0, 1fr);
+  min-height: 0;
+}
+
+.memo-panel-side {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.memo-panel-main {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+#memo-list {
+  overflow-y: auto;
+  padding: 10px 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.memo-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-raised) 88%, var(--bg-overlay) 12%);
+  cursor: pointer;
+  transition: border-color .15s, background .15s, transform .15s;
+}
+.memo-row:hover {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--bg-overlay) 82%, var(--bg-raised) 18%);
+}
+.memo-row.active {
+  border-color: var(--border);
+  background: var(--bg-overlay);
+}
+
+.memo-row-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.memo-row-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.memo-row-name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-current-badge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.06);
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.memo-row-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.memo-row-del,
+.memo-entry-del {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 14px;
+  transition: color .15s, background .15s;
+}
+.memo-row-del:hover,
+.memo-entry-del:hover {
+  color: #f85149;
+  background: rgba(248,81,73,.08);
+}
+
+.memo-panel-label {
+  padding: 12px 16px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: .45px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+#memo-items {
+  overflow-y: auto;
+  padding: 12px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.memo-entry {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-raised) 90%, var(--bg-overlay) 10%);
+}
+
+.memo-entry-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.memo-entry-text {
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.memo-entry-source {
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.memo-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 16px;
+  color: var(--text-dim);
+  font-size: 12px;
+  text-align: center;
+}
+
+.memo-highlight {
+  background: color-mix(in srgb, var(--yellow-bg) 82%, transparent);
+  color: var(--text);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--yellow) 55%, transparent);
+  border-radius: 4px;
+  padding: 0 .08em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+#selection-action {
+  position: fixed;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, 0);
+  z-index: 260;
+  display: none;
+}
+
+#selection-action.open { display: block; }
+
+#btn-add-selection {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--yellow) 45%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-raised) 74%, var(--yellow) 26%);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  box-shadow: 0 10px 26px rgba(0,0,0,.24);
+  cursor: pointer;
+  transition: transform .15s, background .15s, border-color .15s;
+}
+#btn-add-selection:hover {
+  background: color-mix(in srgb, var(--bg-raised) 62%, var(--yellow) 38%);
+  border-color: var(--yellow);
+}
+#btn-add-selection:active { transform: translateY(1px); }
+
+.set-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px 16px 12px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--bg-raised) 86%, var(--bg-overlay) 14%);
+}
+.set-title strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .2px;
+  text-transform: none;
+  color: var(--text);
+}
+.set-title span {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.set-title-actions {
+  display: flex;
+  align-items: center;
+}
+.set-section { padding: 12px 14px; }
+#settings-panel-body {
+  overflow-y: auto;
+  padding-bottom: 20px;
+}
+#btn-settings-close {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--bg-overlay);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  transition: border-color .15s, background .15s, color .15s;
+}
+#btn-settings-close:hover {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--bg-overlay) 84%, var(--blue) 16%);
+  color: var(--text);
+}
+.set-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.set-divider { border-top: 1px solid var(--border-subtle); }
+
+.set-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.set-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-raised) 88%, var(--bg-overlay) 12%);
+}
+
+.set-switch-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.set-switch-copy strong {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.set-switch-copy span {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.set-switch-toggle {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.set-switch-toggle input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.set-switch-slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-overlay) 82%, var(--bg-raised) 18%);
+  border: 1px solid var(--border-subtle);
+  transition: background .15s, border-color .15s;
+}
+
+.set-switch-slider::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: transform .18s ease, background .15s ease;
+}
+
+.set-switch-toggle input:checked + .set-switch-slider {
+  background: color-mix(in srgb, var(--blue-bg) 80%, var(--bg-overlay) 20%);
+  border-color: var(--blue-border);
+}
+
+.set-switch-toggle input:checked + .set-switch-slider::after {
+  transform: translateX(18px);
+  background: var(--blue);
+}
+
+.theme-seg {
+  display: flex;
+  gap: 3px;
+  background: var(--bg-overlay);
+  border-radius: 7px;
+  padding: 3px;
+}
+.tseg-btn {
+  flex: 1;
+  padding: 5px 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  border-radius: 5px;
+  transition: all .15s;
+  font-family: inherit;
+  font-weight: 500;
+}
+.tseg-btn.active {
+  background: var(--bg-raised);
+  color: var(--text);
+  box-shadow: 0 1px 4px rgba(0,0,0,.14);
+}
+
+#extra-prompt,
+#scan-roots,
+#batch-ask-question {
+  width: 100%;
+  min-height: 72px;
+  background: var(--bg-overlay);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.6;
+  padding: 7px 10px;
+  resize: vertical;
+  font-family: inherit;
+}
+#extra-prompt::placeholder,
+#scan-roots::placeholder,
+#batch-ask-question::placeholder { color: var(--text-dim); }
+#extra-prompt:focus,
+#scan-roots:focus,
+#batch-ask-question:focus {
+  outline: none;
+  border-color: var(--blue-border);
+  box-shadow: 0 0 0 3px var(--blue-bg);
+}
+.set-hint { font-size: 11px; color: var(--text-dim); margin-top: 6px; line-height: 1.5; }
+
+.settings-model-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-model-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+#batch-ask-model-select {
+  width: 100%;
+  height: 38px;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background: var(--bg-overlay);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%238b949e' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 10px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 12.5px;
+  padding: 0 40px 0 10px;
+  font-family: inherit;
+}
+
+#batch-ask-model-select:focus {
+  outline: none;
+  border-color: var(--blue-border);
+  box-shadow: 0 0 0 3px var(--blue-bg);
+}
+
+#btn-batch-ask-model-add,
+#btn-batch-ask-model-refresh {
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--bg-overlay);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  transition: border-color .15s, background .15s, color .15s;
+}
+
+#btn-batch-ask-model-add:hover,
+#btn-batch-ask-model-refresh:hover {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--bg-overlay) 84%, var(--blue) 16%);
+}
+
+#btn-batch-ask-model-add:disabled,
+#btn-batch-ask-model-refresh:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+  background: var(--bg-overlay);
+  border-color: var(--border-subtle);
+}
+
+.settings-model-status {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.settings-model-status.error {
+  color: #f85149;
+}
+
+.settings-model-status strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.settings-model-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-model-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-raised) 88%, var(--bg-overlay) 12%);
+}
+
+.settings-model-chip span {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.settings-model-chip button {
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  transition: color .15s, background .15s;
+}
+
+.settings-model-chip button:hover {
+  color: #f85149;
+  background: rgba(248,81,73,.08);
+}
+
+.settings-model-empty {
+  padding: 12px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 12px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.batch-ask-model-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.batch-ask-model-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-raised) 88%, var(--bg-overlay) 12%);
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+
+.batch-ask-model-option.checked {
+  border-color: var(--blue-border);
+  background: color-mix(in srgb, var(--blue-bg) 72%, var(--bg-raised) 28%);
+}
+
+.batch-ask-model-option input {
+  margin: 0;
+  accent-color: var(--blue);
+  flex-shrink: 0;
+}
+
+.batch-ask-model-option span {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.batch-ask-model-empty {
+  padding: 12px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 12px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+#action-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(8, 12, 18, .56);
+  backdrop-filter: blur(6px);
+  z-index: 320;
+}
+
+#action-modal.open {
+  display: flex;
+}
+
+.action-modal-shell {
+  width: min(1100px, calc(100vw - 32px));
+  max-height: min(82vh, 780px);
+  min-height: min(560px, calc(100vh - 48px));
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 28px 60px rgba(0,0,0,.34);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.action-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.action-modal-titlebox {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.action-modal-titlebox strong {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.action-modal-titlebox span {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+#btn-action-modal-close {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  transition: border-color .15s, background .15s, color .15s;
+}
+
+#btn-action-modal-close:hover {
+  border-color: var(--border);
+  background: var(--bg-overlay);
+  color: var(--text);
+}
+
+#action-modal-body {
+  min-height: 0;
+}
+
+.batch-ask-layout {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+}
+
+.batch-ask-form-pane,
+.batch-ask-results-pane {
+  min-height: 0;
+}
+
+.batch-ask-form-pane {
+  padding: 18px;
+  border-right: 1px solid var(--border-subtle);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.batch-ask-results-pane {
+  padding: 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.batch-ask-section {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.batch-ask-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .45px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+#batch-ask-question {
+  min-height: 200px;
+}
+
+.batch-ask-model-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.batch-ask-model-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg);
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.batch-ask-meta {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.batch-ask-runbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#btn-batch-ask-run {
+  border: 1px solid var(--blue-border);
+  background: var(--blue-bg);
+  color: var(--blue);
+  border-radius: 10px;
+  padding: 9px 14px;
+  font: inherit;
+  cursor: pointer;
+  transition: filter .15s, transform .15s;
+}
+
+#btn-batch-ask-run:hover {
+  filter: brightness(1.08);
+}
+
+#btn-batch-ask-run:active {
+  transform: translateY(1px);
+}
+
+#btn-batch-ask-run:disabled {
+  cursor: wait;
+  opacity: .6;
+  filter: none;
+}
+
+.batch-ask-feedback {
+  min-height: 18px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.batch-ask-feedback.error {
+  color: #f85149;
+}
+
+.batch-ask-empty,
+.action-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 16px;
+  padding: 24px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.7;
+}
+
+.batch-ask-summary {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--bg-overlay) 66%, var(--bg-raised) 34%);
+}
+
+.batch-ask-summary strong {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.batch-ask-summary span {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.batch-result-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--bg-raised) 88%, var(--bg-overlay) 12%);
+}
+
+.batch-result-head {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: grid;
+  gap: 4px;
+}
+
+.batch-result-model {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.batch-result-status {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .35px;
+  text-transform: uppercase;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.batch-result-status.ok {
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 35%, var(--border-subtle));
+  background: color-mix(in srgb, var(--green-bg) 75%, transparent);
+}
+
+.batch-result-status.error {
+  color: #f85149;
+  border-color: rgba(248,81,73,.26);
+  background: rgba(248,81,73,.08);
+}
+
+.batch-result-file {
+  font-size: 11px;
+  color: var(--text-dim);
+  word-break: break-all;
+}
+
+.batch-result-body {
+  padding: 14px;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.batch-result-body h1,
+.batch-result-body h2,
+.batch-result-body h3 {
+  font-size: 12.5px;
+  color: var(--green);
+  margin: 8px 0 4px;
+}
+
+.batch-result-body p { margin: 4px 0; }
+.batch-result-body ul,
+.batch-result-body ol { padding-left: 16px; margin: 4px 0; }
+.batch-result-body code {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 11.5px;
+  background: var(--bg-overlay);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--green);
+}
+
+@media (max-width: 960px) {
+  .batch-ask-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .batch-ask-form-pane {
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .action-modal-shell {
+    width: calc(100vw - 20px);
+    min-height: calc(100vh - 20px);
+    max-height: calc(100vh - 20px);
+  }
+
+  #settings-panel {
+    width: min(100vw, 400px);
+  }
+
+  #memo-panel {
+    width: min(100vw, 640px);
+  }
+
+  .settings-model-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  #batch-ask-model-select {
+    grid-column: 1 / -1;
+  }
+
+  .set-switch {
+    align-items: flex-start;
+  }
+
+  .memo-panel-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .memo-panel-side {
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .memo-panel-sub {
+    border-right: none;
+  }
+}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="topbar-logo">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+      <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+    </svg>
+    Markdown<span>Reader</span>
+  </div>
+  <div id="topbar-file" style="display:none"></div>
+  <div class="topbar-status" id="topbar-status"></div>
+  <div id="memo-wrap" style="flex-shrink:0">
+    <button id="btn-memo" type="button" title="备忘录" aria-haspopup="dialog" aria-expanded="false" aria-controls="memo-panel">
+      <span class="memo-pill"></span>
+      <span id="memo-current-label">备忘录</span>
+      <span id="memo-current-count">0</span>
+    </button>
+    <div id="memo-backdrop" aria-hidden="true"></div>
+    <div id="memo-panel" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="memo-panel-title">
+      <div class="memo-panel-head">
+        <div class="memo-panel-title">
+          <strong id="memo-panel-title">备忘录</strong>
+          <span>框选 Skill 或 AI 解读中的文本后可直接归档</span>
+        </div>
+        <div class="memo-panel-actions">
+          <button id="btn-memo-new" class="btn-mini" type="button">新建</button>
+          <button id="btn-memo-close" class="btn-icon-mini" type="button" aria-label="关闭备忘录">×</button>
+        </div>
+      </div>
+      <div class="memo-panel-layout">
+        <div class="memo-panel-side">
+          <div class="memo-panel-sub">目录。当前选中的备忘录会接收新的摘录，内容落在项目的 <code>memo/</code> 目录。</div>
+          <div id="memo-list"></div>
+        </div>
+        <div class="memo-panel-main">
+          <div class="memo-panel-label">当前备忘录内容</div>
+          <div id="memo-items"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="settings-wrap" style="flex-shrink:0">
+    <button id="btn-settings" type="button" title="设置" aria-haspopup="dialog" aria-expanded="false" aria-controls="settings-panel">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
+    <div id="settings-backdrop" aria-hidden="true"></div>
+    <div id="settings-panel" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="settings-title">
+      <div class="set-title">
+        <div>
+          <strong id="settings-title">设置</strong>
+          <span>主题、解析目录、Cloudflare Gateway、Batch Ask 模型和解读补充要求</span>
+        </div>
+        <div class="set-title-actions">
+          <button id="btn-settings-close" type="button" aria-label="关闭设置">×</button>
+        </div>
+      </div>
+      <div id="settings-panel-body">
+        <div class="set-section">
+          <div class="set-label">主题</div>
+          <div class="theme-seg">
+            <button class="tseg-btn" data-t="dark">深色</button>
+            <button class="tseg-btn" data-t="light">浅色</button>
+          </div>
+        </div>
+        <div class="set-divider"></div>
+        <div class="set-section">
+          <div class="set-label">解析目录</div>
+          <textarea id="scan-roots" rows="4" placeholder="skill"></textarea>
+          <div class="set-hint">一行一个，相对项目根目录。失焦后自动刷新左侧文档树。</div>
+        </div>
+        <div class="set-divider"></div>
+        <div class="set-section">
+          <div class="set-label">Cloudflare AI Gateway</div>
+          <div class="set-stack">
+            <label class="set-switch" for="gateway-enabled">
+              <span class="set-switch-copy">
+                <strong>启用 Gateway</strong>
+                <span>开启后，OpenRouter 的模型清单和 Batch Ask 请求都会改走 Cloudflare AI Gateway。</span>
+              </span>
+              <span class="set-switch-toggle">
+                <input id="gateway-enabled" type="checkbox">
+                <span class="set-switch-slider"></span>
+              </span>
+            </label>
+          </div>
+        </div>
+        <div class="set-divider"></div>
+        <div class="set-section">
+          <div class="set-label">Batch Ask 模型</div>
+          <div id="batch-ask-model-manager"></div>
+          <div class="set-hint">从当前链路下的 OpenRouter 模型清单里下拉选择添加。当前配置会保存在本地，Batch Ask 弹窗会在这里配置的范围内选择本次调用模型。API Key 从 <code>.env</code> 的 <code>OPENROUTER_API_KEY</code> 读取。</div>
+        </div>
+        <div class="set-divider"></div>
+        <div class="set-section">
+          <div class="set-label">AI 解读补充要求</div>
+          <textarea id="extra-prompt" rows="3" placeholder="不要使用emoji"></textarea>
+          <div class="set-hint">修改后对新生成的解读生效（已缓存的不受影响）</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="progress-bar" style="width:0"></div>
+
+<div id="layout">
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div id="sidebar-main">
+      <div id="sidebar-tabs">
+        <button class="stab active" data-tab="tree">文档</button>
+        <button class="stab" data-tab="bookmarks">收藏 <span id="bm-count"></span></button>
+      </div>
+      <div id="tab-tree">
+        <div id="skill-tree">
+          <div class="loading-row" style="padding:14px 16px">
+            <div class="spinner"></div> 加载中…
+          </div>
+        </div>
+      </div>
+      <div id="tab-bookmarks" style="display:none">
+        <div id="bookmarks-list"></div>
+      </div>
+    </div>
+    <div id="sidebar-action-dock">
+      <div id="sidebar-action-dock-row">
+        <button id="btn-sidebar-action" type="button" title="打开当前操作">
+          <span class="sidebar-action-copy">
+            <span id="sidebar-action-label">Batch Ask</span>
+          </span>
+        </button>
+        <button id="btn-sidebar-action-switch" type="button" title="切换操作" aria-haspopup="true" aria-expanded="false">▾</button>
+      </div>
+      <div id="sidebar-action-menu"></div>
+    </div>
+  </aside>
+
+  <!-- Content -->
+  <div id="content">
+    <div class="content-state">
+      <div class="spinner"></div>
+      <h2>正在初始化…</h2>
+      <p>正在加载 Markdown 文档与界面状态</p>
+    </div>
+  </div>
+</div>
+
+<div id="selection-action">
+  <button id="btn-add-selection" type="button">添加到当前备忘录</button>
+</div>
+
+<div id="action-modal" aria-hidden="true">
+  <div class="action-modal-shell" role="dialog" aria-modal="true" aria-labelledby="action-modal-title">
+    <div class="action-modal-head">
+      <div class="action-modal-titlebox">
+        <strong id="action-modal-title"></strong>
+        <span id="action-modal-subtitle"></span>
+      </div>
+      <button id="btn-action-modal-close" type="button" aria-label="关闭">×</button>
+    </div>
+    <div id="action-modal-body"></div>
+  </div>
+</div>
+
+<script>
+marked.setOptions({ breaks: true, gfm: true });
+
+// ── State ──────────────────────────────────────────────────
+const S = {
+  activeFile: null,
+  blocks:     [],
+  activeId:   null,
+  analysisScrollRaf: 0,
+};
+const DEFAULT_SCAN_ROOT = 'skill';
+const LEGACY_OPENROUTER_DEFAULT_BATCH_ASK_MODELS = [
+  'anthropic/claude-sonnet-4.5',
+  'openai/gpt-4.1-mini',
+  'google/gemini-2.5-flash-lite',
+];
+const LEGACY_POE_DEFAULT_BATCH_ASK_MODELS = [
+  'GPT-5-Codex',
+  'Claude-Sonnet-4.5',
+  'Gemini-3-Pro',
+];
+const DEFAULT_BATCH_ASK_MODELS = [
+  'gpt-5.2',
+  'gpt-5.4',
+  'gemini-3.1-pro',
+  'claude-opus-4.6',
+  'grok-4.20-multi-agent',
+  'deepseek-r1',
+];
+const SIDEBAR_ACTIONS = [
+  {
+    id: 'batch-ask',
+    label: 'Batch Ask',
+    desc: '向多个模型发起同一个问题',
+    title: 'Batch Ask',
+    subtitle: '一次输入，同步查看多个 OpenRouter 模型的 Markdown 回答。',
+  },
+  {
+    id: 'search-skills',
+    label: 'Search Skills',
+    desc: '预留入口，后续扩展 Skill 检索',
+    title: 'Search Skills',
+    subtitle: '这个入口先预留，后续会接检索与发现能力。',
+  },
+];
+
+// Per-file analyses (persists across file switches, supports parallel)
+const allAnalyses  = {};   // { [filePath]: { [blockId]: string } }
+const analyzingFiles = new Set();  // files currently being analyzed
+const regeneratingBlocks = new Set();
+const collapsedDirPaths = loadCollapsedDirs();
+const memoHostHtml = new WeakMap();
+const memoState = {
+  memos: [],
+  currentId: localStorage.getItem('sr_current_memo_id') || '',
+  selection: null,
+  selectionFrame: 0,
+  statusTimer: 0,
+};
+const batchAskState = {
+  actionId: localStorage.getItem('sr_sidebar_action') || 'batch-ask',
+  draftQuestion: '',
+  running: false,
+  feedback: '',
+  feedbackType: 'info',
+  lastRun: null,
+};
+const openRouterModelState = {
+  items: [],
+  loaded: false,
+  loading: false,
+  error: '',
+  selectedId: '',
+};
+let closeSettingsDrawer = () => {};
+let closeMemoDrawer = () => {};
+
+// ── Utils ──────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+function setProgress(done, total) {
+  const pct = total ? (done / total) * 100 : 0;
+  $('progress-bar').style.width = pct + '%';
+  if (done >= total && total > 0) {
+    setTimeout(() => { $('progress-bar').style.width = '0'; }, 600);
+  }
+}
+
+function setStatus(html) {
+  $('topbar-status').innerHTML = html;
+}
+
+function loadCollapsedDirs() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem('sr_collapsed_dirs') || '[]'));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveCollapsedDirs() {
+  localStorage.setItem('sr_collapsed_dirs', JSON.stringify([...collapsedDirPaths]));
+}
+
+function setDirCollapsed(dirPath, collapsed) {
+  if (!dirPath) return;
+  if (collapsed) collapsedDirPaths.add(dirPath);
+  else collapsedDirPaths.delete(dirPath);
+  saveCollapsedDirs();
+}
+
+function normalizeScanRoots(value) {
+  const source = Array.isArray(value)
+    ? value
+    : String(value ?? '').split(/\r?\n/);
+  const roots = [];
+  const seen = new Set();
+
+  for (const rawRoot of source) {
+    const root = String(rawRoot || '')
+      .trim()
+      .replace(/\\/g, '/')
+      .replace(/^\.\/+/, '')
+      .replace(/^\/+/, '')
+      .replace(/\/+/g, '/')
+      .replace(/\/$/, '');
+    if (!root || root === '.' || seen.has(root)) continue;
+    seen.add(root);
+    roots.push(root);
+  }
+
+  return roots.length ? roots : [DEFAULT_SCAN_ROOT];
+}
+
+function getScanRoots() {
+  const stored = localStorage.getItem('sr_scan_roots');
+  return stored === null ? [DEFAULT_SCAN_ROOT] : normalizeScanRoots(stored);
+}
+
+function saveScanRoots(roots) {
+  localStorage.setItem('sr_scan_roots', normalizeScanRoots(roots).join('\n'));
+}
+
+function normalizeBatchAskModels(value, { fallbackToDefault = true } = {}) {
+  const source = Array.isArray(value)
+    ? value
+    : String(value ?? '').split(/\r?\n/);
+  const models = [];
+  const seen = new Set();
+
+  for (const rawModel of source) {
+    const model = String(rawModel || '').trim();
+    if (!model || seen.has(model)) continue;
+    seen.add(model);
+    models.push(model);
+  }
+
+  return models.length ? models : (fallbackToDefault ? [...DEFAULT_BATCH_ASK_MODELS] : []);
+}
+
+function getBatchAskModels() {
+  const stored = localStorage.getItem('sr_batch_ask_models');
+  if (stored === null) return [...DEFAULT_BATCH_ASK_MODELS];
+
+  const normalized = normalizeBatchAskModels(stored, { fallbackToDefault: false });
+  const legacyDefaults = normalizeBatchAskModels(LEGACY_OPENROUTER_DEFAULT_BATCH_ASK_MODELS);
+  const legacyPoeDefaults = normalizeBatchAskModels(LEGACY_POE_DEFAULT_BATCH_ASK_MODELS);
+  if (
+    normalized.length === legacyDefaults.length &&
+    normalized.every((model, index) => model === legacyDefaults[index])
+  ) {
+    saveBatchAskModels(DEFAULT_BATCH_ASK_MODELS);
+    return [...DEFAULT_BATCH_ASK_MODELS];
+  }
+  if (
+    normalized.length === legacyPoeDefaults.length &&
+    normalized.every((model, index) => model === legacyPoeDefaults[index])
+  ) {
+    saveBatchAskModels(DEFAULT_BATCH_ASK_MODELS);
+    return [...DEFAULT_BATCH_ASK_MODELS];
+  }
+
+  return normalized;
+}
+
+function saveBatchAskModels(models) {
+  localStorage.setItem('sr_batch_ask_models', normalizeBatchAskModels(models, { fallbackToDefault: false }).join('\n'));
+}
+
+function getSelectedBatchAskModels() {
+  const configured = getBatchAskModels();
+  const stored = localStorage.getItem('sr_batch_ask_selected_models');
+  if (stored === null) return [...configured];
+
+  const selected = normalizeBatchAskModels(stored, { fallbackToDefault: false })
+    .filter(model => configured.includes(model));
+  if (selected.length !== normalizeBatchAskModels(stored, { fallbackToDefault: false }).length) {
+    saveSelectedBatchAskModels(selected);
+  }
+  return selected;
+}
+
+function saveSelectedBatchAskModels(models) {
+  localStorage.setItem(
+    'sr_batch_ask_selected_models',
+    normalizeBatchAskModels(models, { fallbackToDefault: false }).join('\n')
+  );
+}
+
+function getOpenRouterGatewaySettings() {
+  return {
+    enabled: localStorage.getItem('sr_openrouter_gateway_enabled') === '1',
+  };
+}
+
+function saveOpenRouterGatewaySettings(nextPatch = {}) {
+  const current = getOpenRouterGatewaySettings();
+  const next = {
+    ...current,
+    ...nextPatch,
+  };
+
+  localStorage.setItem('sr_openrouter_gateway_enabled', next.enabled ? '1' : '0');
+  return getOpenRouterGatewaySettings();
+}
+
+function getOpenRouterRouteLabel(settings = getOpenRouterGatewaySettings()) {
+  return settings.enabled ? 'Cloudflare AI Gateway' : 'OpenRouter 直连';
+}
+
+function renderOpenRouterGatewaySettings() {
+  const settings = getOpenRouterGatewaySettings();
+  if ($('gateway-enabled')) $('gateway-enabled').checked = settings.enabled;
+}
+
+function getAddableOpenRouterModels() {
+  const configured = new Set(getBatchAskModels());
+  return openRouterModelState.items.filter(item => !configured.has(item.id));
+}
+
+function syncOpenRouterModelSelection(preferredId = '') {
+  const addable = getAddableOpenRouterModels();
+  if (preferredId && addable.some(item => item.id === preferredId)) {
+    openRouterModelState.selectedId = preferredId;
+    return;
+  }
+  if (openRouterModelState.selectedId && addable.some(item => item.id === openRouterModelState.selectedId)) {
+    return;
+  }
+  openRouterModelState.selectedId = addable[0]?.id || '';
+}
+
+function syncBatchAskModelConfiguration(models) {
+  saveBatchAskModels(models);
+  getSelectedBatchAskModels();
+  syncOpenRouterModelSelection();
+  renderBatchAskModelManager();
+  if (batchAskState.actionId === 'batch-ask' && $('action-modal').classList.contains('open')) {
+    renderActionModal();
+  }
+}
+
+function addBatchAskConfiguredModel(model) {
+  const value = String(model || '').trim();
+  if (!value) return;
+  const next = normalizeBatchAskModels([...getBatchAskModels(), value], { fallbackToDefault: false });
+  syncBatchAskModelConfiguration(next);
+}
+
+function removeBatchAskConfiguredModel(model) {
+  const next = getBatchAskModels().filter(item => item !== model);
+  syncBatchAskModelConfiguration(next);
+}
+
+function renderBatchAskModelManager() {
+  const host = $('batch-ask-model-manager');
+  if (!host) return;
+
+  const gatewaySettings = getOpenRouterGatewaySettings();
+  const routeLabel = getOpenRouterRouteLabel(gatewaySettings);
+  const configuredModels = getBatchAskModels();
+  const addableModels = getAddableOpenRouterModels();
+  syncOpenRouterModelSelection();
+
+  let statusText = `准备从 ${routeLabel} 读取模型列表…`;
+  if (openRouterModelState.loading) {
+    statusText = `正在通过 ${routeLabel} 同步 OpenRouter 模型列表…`;
+  } else if (openRouterModelState.error) {
+    statusText = `模型列表加载失败：${openRouterModelState.error}`;
+  } else if (openRouterModelState.loaded) {
+    statusText = `已通过 ${routeLabel} 加载 ${openRouterModelState.items.length} 个 OpenRouter 模型`;
+  }
+
+  host.innerHTML = `
+    <div class="settings-model-picker">
+      <div class="settings-model-toolbar">
+        <select id="batch-ask-model-select"${addableModels.length ? '' : ' disabled'}>
+          ${addableModels.length
+            ? addableModels.map(item => `<option value="${escHtml(item.id)}">${escHtml(item.id)}${item.name && item.name !== item.id ? ` · ${escHtml(item.name)}` : ''}</option>`).join('')
+            : `<option value="">${openRouterModelState.loading ? '正在加载模型列表…' : (openRouterModelState.error || '没有可添加的模型')}</option>`}
+        </select>
+        <button id="btn-batch-ask-model-add" type="button"${openRouterModelState.selectedId ? '' : ' disabled'}>添加</button>
+        <button id="btn-batch-ask-model-refresh" type="button"${openRouterModelState.loading ? ' disabled' : ''}>${openRouterModelState.loading ? '刷新中…' : '刷新'}</button>
+      </div>
+      <div class="settings-model-status${openRouterModelState.error ? ' error' : ''}">${escHtml(statusText)}</div>
+      ${configuredModels.length
+        ? `<div class="settings-model-list">
+            ${configuredModels.map(model => `
+              <div class="settings-model-chip">
+                <span>${escHtml(model)}</span>
+                <button type="button" data-remove-batch-model="${escHtml(model)}" aria-label="移除 ${escHtml(model)}">×</button>
+              </div>
+            `).join('')}
+          </div>`
+        : '<div class="settings-model-empty">还没有配置 Batch Ask 模型。</div>'}
+    </div>
+  `;
+
+  const select = $('batch-ask-model-select');
+  if (select) {
+    select.value = openRouterModelState.selectedId;
+    select.addEventListener('change', () => {
+      openRouterModelState.selectedId = select.value;
+      renderBatchAskModelManager();
+    });
+  }
+
+  $('btn-batch-ask-model-add')?.addEventListener('click', () => {
+    addBatchAskConfiguredModel($('batch-ask-model-select')?.value);
+  });
+  $('btn-batch-ask-model-refresh')?.addEventListener('click', () => {
+    loadOpenRouterModels({ forceRefresh: true });
+  });
+  host.querySelectorAll('[data-remove-batch-model]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      removeBatchAskConfiguredModel(btn.dataset.removeBatchModel);
+    });
+  });
+}
+
+async function loadOpenRouterModels({ forceRefresh = false, silent = false } = {}) {
+  const gatewaySettings = getOpenRouterGatewaySettings();
+  if (openRouterModelState.loading) return;
+
+  openRouterModelState.loading = true;
+  openRouterModelState.error = '';
+  renderOpenRouterGatewaySettings();
+  renderBatchAskModelManager();
+
+  try {
+    const data = await fetchJson('/api/openrouter/models', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        refresh: forceRefresh,
+        gatewayEnabled: gatewaySettings.enabled,
+      }),
+    });
+    const seen = new Set();
+    openRouterModelState.items = [];
+    for (const item of Array.isArray(data?.models) ? data.models : []) {
+      const id = String(item?.id || '').trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      openRouterModelState.items.push({
+        id,
+        name: String(item?.name || '').trim(),
+      });
+    }
+    openRouterModelState.loaded = true;
+    syncOpenRouterModelSelection();
+  } catch (err) {
+    openRouterModelState.error = err.message || '未知错误';
+    if (!silent) showTransientStatus(`模型列表加载失败：${openRouterModelState.error}`);
+  } finally {
+    openRouterModelState.loading = false;
+    renderOpenRouterGatewaySettings();
+    renderBatchAskModelManager();
+  }
+}
+
+function getSidebarActionMeta(actionId = batchAskState.actionId) {
+  return SIDEBAR_ACTIONS.find(item => item.id === actionId) || SIDEBAR_ACTIONS[0];
+}
+
+function createRootsSearchParams(extraEntries = {}) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(extraEntries)) {
+    if (value != null) params.set(key, value);
+  }
+  for (const root of getScanRoots()) {
+    params.append('roots', root);
+  }
+  return params;
+}
+
+function getSkillName(filePath) {
+  const parts = String(filePath || '').split('/').filter(Boolean);
+  const fileName = parts.at(-1) || '';
+  const referencesIndex = parts.lastIndexOf('references');
+  if (referencesIndex > 0) return parts[referencesIndex - 1];
+  if (/^SKILL\.md$/i.test(fileName) && parts.length >= 2) return parts[parts.length - 2];
+  return fileName.replace(/\.md$/i, '') || parts.at(-2) || filePath;
+}
+
+async function fetchJson(url, options = {}) {
+  const res = await fetch(url, options);
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}));
+    throw new Error(payload.error || `${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+function getCurrentMemo() {
+  const current = memoState.memos.find(memo => memo.id === memoState.currentId);
+  return current || memoState.memos[0] || null;
+}
+
+function syncCurrentMemoId(nextId) {
+  memoState.currentId = nextId || '';
+  if (memoState.currentId) {
+    localStorage.setItem('sr_current_memo_id', memoState.currentId);
+  } else {
+    localStorage.removeItem('sr_current_memo_id');
+  }
+}
+
+function ensureCurrentMemo() {
+  const memo = getCurrentMemo();
+  syncCurrentMemoId(memo?.id || '');
+  return memo;
+}
+
+function formatMemoCount(count) {
+  return `${count || 0}`;
+}
+
+function showTransientStatus(message) {
+  clearTimeout(memoState.statusTimer);
+  setStatus(message);
+  memoState.statusTimer = setTimeout(() => setStatus(''), 1800);
+}
+
+function renderMemoButton() {
+  const memo = ensureCurrentMemo();
+  $('memo-current-label').textContent = memo?.name || '备忘录';
+  $('memo-current-count').textContent = formatMemoCount(memo?.entries?.length || 0);
+}
+
+function getMemoEntriesForSource(sourcePath) {
+  const entries = [];
+  const seen = new Set();
+  for (const memo of memoState.memos) {
+    for (const entry of memo.entries || []) {
+      if (entry.sourcePath !== sourcePath) continue;
+      const text = String(entry.text || '').trim();
+      if (!text || seen.has(text)) continue;
+      seen.add(text);
+      entries.push(text);
+    }
+  }
+  return entries.sort((a, b) => b.length - a.length);
+}
+
+function buildMemoTextNodes(root) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const parent = node.parentElement;
+      if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+      if (parent?.closest('.memo-highlight, code, pre, script, style')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  return nodes;
+}
+
+function getHostPlainText(root) {
+  return buildMemoTextNodes(root).map(node => node.nodeValue).join('');
+}
+
+function hasMatchOverlap(matches, start, end) {
+  return matches.some(match => Math.max(match.start, start) < Math.min(match.end, end));
+}
+
+function findMemoMatches(text, terms) {
+  const matches = [];
+  for (const term of terms) {
+    let offset = 0;
+    while (offset < text.length) {
+      const index = text.indexOf(term, offset);
+      if (index === -1) break;
+      const end = index + term.length;
+      if (!hasMatchOverlap(matches, index, end)) {
+        matches.push({ start: index, end });
+      }
+      offset = end;
+    }
+  }
+  return matches.sort((a, b) => b.start - a.start);
+}
+
+function resolveMemoOffset(nodes, offset) {
+  let cursor = 0;
+  for (const node of nodes) {
+    const next = cursor + node.nodeValue.length;
+    if (offset <= next) {
+      return { node, offset: offset - cursor };
+    }
+    cursor = next;
+  }
+  const lastNode = nodes.at(-1);
+  return lastNode ? { node: lastNode, offset: lastNode.nodeValue.length } : null;
+}
+
+function applyMemoHighlightRange(root, start, end) {
+  const nodes = buildMemoTextNodes(root);
+  if (!nodes.length) return;
+
+  const startPos = resolveMemoOffset(nodes, start);
+  const endPos = resolveMemoOffset(nodes, end);
+  if (!startPos || !endPos) return;
+
+  const range = document.createRange();
+  range.setStart(startPos.node, startPos.offset);
+  range.setEnd(endPos.node, endPos.offset);
+
+  const wrapper = document.createElement('span');
+  wrapper.className = 'memo-highlight';
+  wrapper.appendChild(range.extractContents());
+  range.insertNode(wrapper);
+}
+
+function applyMemoHighlightsForHost(host) {
+  const rawHtml = memoHostHtml.get(host);
+  if (rawHtml == null) return;
+
+  host.innerHTML = rawHtml;
+  const sourcePath = buildSelectionSource(host);
+  const terms = getMemoEntriesForSource(sourcePath);
+  if (!terms.length) return;
+
+  const text = getHostPlainText(host);
+  if (!text) return;
+
+  const matches = findMemoMatches(text, terms);
+  for (const match of matches) {
+    applyMemoHighlightRange(host, match.start, match.end);
+  }
+}
+
+function applyMemoHighlights() {
+  document.querySelectorAll('.block-body, .analysis-body').forEach(applyMemoHighlightsForHost);
+}
+
+function getMemoHostHtml(el) {
+  return memoHostHtml.get(el) ?? el?.innerHTML ?? '';
+}
+
+function setMemoHostHtml(el, html) {
+  memoHostHtml.set(el, html);
+  applyMemoHighlightsForHost(el);
+}
+
+function renderMemoList() {
+  const container = $('memo-list');
+  const currentMemo = ensureCurrentMemo();
+  if (!container) return;
+
+  if (!memoState.memos.length) {
+    container.innerHTML = '<div class="memo-empty">还没有备忘录</div>';
+    return;
+  }
+
+  container.innerHTML = memoState.memos.map(memo => `
+    <div class="memo-row${memo.id === currentMemo?.id ? ' active' : ''}" data-memo-id="${memo.id}">
+      <div class="memo-row-main">
+        <div class="memo-row-name">
+          <strong>${escHtml(memo.name)}</strong>
+          ${memo.id === currentMemo?.id ? '<span class="memo-current-badge">当前</span>' : ''}
+        </div>
+        <div class="memo-row-meta">${memo.entries.length} 条摘录</div>
+      </div>
+      <button class="memo-row-del" data-memo-del="${memo.id}" title="删除备忘录" type="button">×</button>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.memo-row').forEach(row => {
+    row.addEventListener('click', e => {
+      const delBtn = e.target.closest('[data-memo-del]');
+      if (delBtn) return;
+      syncCurrentMemoId(row.dataset.memoId);
+      renderMemoUI();
+    });
+  });
+
+  container.querySelectorAll('[data-memo-del]').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const memoId = btn.dataset.memoDel;
+      if (!memoId) return;
+      if (!confirm('删除这个备忘录吗？')) return;
+      try {
+        const data = await fetchJson(`/api/memos/${encodeURIComponent(memoId)}`, { method: 'DELETE' });
+        memoState.memos = data.memos || [];
+        ensureCurrentMemo();
+        renderMemoUI();
+      } catch (err) {
+        showTransientStatus(`删除失败：${err.message}`);
+      }
+    });
+  });
+}
+
+function renderMemoEntries() {
+  const container = $('memo-items');
+  const memo = ensureCurrentMemo();
+  if (!container) return;
+
+  if (!memo) {
+    container.innerHTML = '<div class="memo-empty">先创建一个备忘录</div>';
+    return;
+  }
+
+  if (!memo.entries.length) {
+    container.innerHTML = '<div class="memo-empty">当前备忘录还是空的，框选文本后添加即可。</div>';
+    return;
+  }
+
+  container.innerHTML = memo.entries.map((entry, index) => `
+    <div class="memo-entry">
+      <div class="memo-entry-main">
+        <div class="memo-entry-text">${escHtml(entry.text)}</div>
+        <div class="memo-entry-source">${escHtml(entry.sourcePath)}</div>
+      </div>
+      <button class="memo-entry-del" data-memo-entry-del="${index}" title="删除摘录" type="button">×</button>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('[data-memo-entry-del]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        const data = await fetchJson(
+          `/api/memos/${encodeURIComponent(memo.id)}/items/${btn.dataset.memoEntryDel}`,
+          { method: 'DELETE' }
+        );
+        memoState.memos = memoState.memos.map(item => item.id === data.memo.id ? data.memo : item);
+        renderMemoUI();
+      } catch (err) {
+        showTransientStatus(`删除失败：${err.message}`);
+      }
+    });
+  });
+}
+
+function renderMemoUI() {
+  ensureCurrentMemo();
+  renderMemoButton();
+  renderMemoList();
+  renderMemoEntries();
+  applyMemoHighlights();
+}
+
+async function loadMemos() {
+  const data = await fetchJson('/api/memos');
+  memoState.memos = data.memos || [];
+  renderMemoUI();
+}
+
+async function createMemo() {
+  const data = await fetchJson('/api/memos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  memoState.memos = data.memos || [];
+  syncCurrentMemoId(data.memo?.id || memoState.currentId);
+  renderMemoUI();
+}
+
+function hideSelectionAction(clearSelection = false) {
+  const action = $('selection-action');
+  action.classList.remove('open');
+  memoState.selection = null;
+  if (memoState.selectionFrame) {
+    cancelAnimationFrame(memoState.selectionFrame);
+    memoState.selectionFrame = 0;
+  }
+  if (clearSelection) {
+    const selection = window.getSelection();
+    if (selection?.rangeCount) selection.removeAllRanges();
+  }
+}
+
+function nodeToElement(node) {
+  if (!node) return null;
+  return node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+}
+
+function buildSelectionSource(host) {
+  const zone = host.dataset.sourceZone === 'analysis' ? 'AI解读' : 'Skill';
+  const filePath = host.dataset.filePath || '';
+  const blockType = (host.dataset.blockType || '').toUpperCase();
+  const blockId = host.dataset.blockId || '';
+  const heading = host.dataset.heading || '';
+  return `${zone} | ${filePath} | ${blockType}#${blockId} ${heading}`.trim();
+}
+
+function updateSelectionAction() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    hideSelectionAction();
+    return;
+  }
+
+  const text = selection.toString().trim();
+  if (!text) {
+    hideSelectionAction();
+    return;
+  }
+
+  const range = selection.getRangeAt(0);
+  const startHost = nodeToElement(range.startContainer)?.closest('.block-body, .analysis-body');
+  const endHost = nodeToElement(range.endContainer)?.closest('.block-body, .analysis-body');
+  if (!startHost || startHost !== endHost) {
+    hideSelectionAction();
+    return;
+  }
+
+  const rect = range.getBoundingClientRect();
+  if (!rect.width && !rect.height) {
+    hideSelectionAction();
+    return;
+  }
+
+  memoState.selection = {
+    text,
+    sourcePath: buildSelectionSource(startHost),
+  };
+
+  const action = $('selection-action');
+  const left = Math.min(
+    window.innerWidth - 20,
+    Math.max(20, rect.left + rect.width / 2)
+  );
+  const top = Math.min(
+    window.innerHeight - 18,
+    Math.max(12, rect.bottom + 14)
+  );
+  action.style.left = `${left}px`;
+  action.style.top = `${top}px`;
+  action.classList.add('open');
+}
+
+function scheduleSelectionActionUpdate() {
+  if (memoState.selectionFrame) cancelAnimationFrame(memoState.selectionFrame);
+  memoState.selectionFrame = requestAnimationFrame(() => {
+    memoState.selectionFrame = 0;
+    updateSelectionAction();
+  });
+}
+
+async function addCurrentSelectionToMemo() {
+  const memo = ensureCurrentMemo();
+  if (!memo || !memoState.selection) return;
+
+  try {
+    const data = await fetchJson(`/api/memos/${encodeURIComponent(memo.id)}/items`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(memoState.selection),
+    });
+    memoState.memos = memoState.memos.map(item => item.id === data.memo.id ? data.memo : item);
+    renderMemoUI();
+    hideSelectionAction(true);
+    showTransientStatus(`已加入 ${data.memo.name}`);
+  } catch (err) {
+    showTransientStatus(`添加失败：${err.message}`);
+  }
+}
+
+function initMemoPanel() {
+  const btn = $('btn-memo');
+  const panel = $('memo-panel');
+  const backdrop = $('memo-backdrop');
+  const newBtn = $('btn-memo-new');
+  const closeBtn = $('btn-memo-close');
+  const addBtn = $('btn-add-selection');
+
+  const syncMemoOpenState = open => {
+    panel.classList.toggle('open', open);
+    panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+    backdrop.classList.toggle('open', open);
+    backdrop.setAttribute('aria-hidden', open ? 'false' : 'true');
+    btn.classList.toggle('active', open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+
+  closeMemoDrawer = () => syncMemoOpenState(false);
+  const toggleMemoDrawer = () => {
+    const nextOpen = !panel.classList.contains('open');
+    if (nextOpen) closeSettingsDrawer();
+    syncMemoOpenState(nextOpen);
+  };
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    toggleMemoDrawer();
+  });
+
+  closeBtn?.addEventListener('click', closeMemoDrawer);
+  backdrop?.addEventListener('click', closeMemoDrawer);
+
+  document.addEventListener('click', e => {
+    if (!panel.classList.contains('open')) return;
+    const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+    if (path.includes(panel) || path.includes(btn)) return;
+    closeMemoDrawer();
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeMemoDrawer();
+  });
+
+  newBtn.addEventListener('click', async () => {
+    try {
+      await createMemo();
+    } catch (err) {
+      showTransientStatus(`新建失败：${err.message}`);
+    }
+  });
+
+  addBtn.addEventListener('mousedown', e => e.preventDefault());
+  addBtn.addEventListener('click', async e => {
+    e.preventDefault();
+    await addCurrentSelectionToMemo();
+  });
+
+  document.addEventListener('selectionchange', scheduleSelectionActionUpdate);
+  document.addEventListener('mouseup', scheduleSelectionActionUpdate);
+  document.addEventListener('mousedown', e => {
+    if (!e.target.closest('#selection-action')) hideSelectionAction();
+  });
+  document.addEventListener('scroll', () => {
+    if (memoState.selection) scheduleSelectionActionUpdate();
+  }, true);
+  window.addEventListener('resize', () => {
+    if (memoState.selection) scheduleSelectionActionUpdate();
+  });
+}
+
+function closeSidebarActionMenu() {
+  $('sidebar-action-menu').classList.remove('open');
+  $('btn-sidebar-action-switch').classList.remove('active');
+  $('btn-sidebar-action-switch').setAttribute('aria-expanded', 'false');
+}
+
+function setSidebarAction(actionId) {
+  batchAskState.actionId = getSidebarActionMeta(actionId).id;
+  localStorage.setItem('sr_sidebar_action', batchAskState.actionId);
+  renderSidebarActionDock();
+  if ($('action-modal').classList.contains('open')) renderActionModal();
+}
+
+function renderSidebarActionDock() {
+  const current = getSidebarActionMeta();
+  $('sidebar-action-label').textContent = current.label;
+
+  const menu = $('sidebar-action-menu');
+  menu.innerHTML = SIDEBAR_ACTIONS.map(item => `
+    <button
+      class="sidebar-action-item${item.id === current.id ? ' active' : ''}"
+      type="button"
+      data-sidebar-action="${item.id}"
+    >
+      <strong>${escHtml(item.label)}</strong>
+    </button>
+  `).join('');
+
+  menu.querySelectorAll('[data-sidebar-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setSidebarAction(btn.dataset.sidebarAction);
+      closeSidebarActionMenu();
+    });
+  });
+}
+
+function renderBatchAskResults() {
+  if (!batchAskState.lastRun) {
+    return '<div class="batch-ask-empty">问题提交后，这里会展示各个模型的回答，并标出写入 <code>batch-ask/</code> 的文件位置。</div>';
+  }
+
+  const run = batchAskState.lastRun;
+  const resultsHtml = (run.results || []).map(result => `
+    <article class="batch-result-card">
+      <div class="batch-result-head">
+        <div class="batch-result-model">
+          <span>${escHtml(result.model)}</span>
+          <span class="batch-result-status ${result.status === 'ok' ? 'ok' : 'error'}">${result.status === 'ok' ? 'ok' : 'error'}</span>
+        </div>
+        <div class="batch-result-file">${escHtml(result.filePath || '')}</div>
+      </div>
+      <div class="batch-result-body">${renderMd(result.content || '')}</div>
+    </article>
+  `).join('');
+
+  return `
+    <div class="batch-ask-summary">
+      <strong>${escHtml(run.question)}</strong>
+      <span>输出目录：${escHtml(run.directory)}</span>
+      <span>共返回 ${run.results?.length || 0} 个模型结果</span>
+    </div>
+    ${resultsHtml}
+  `;
+}
+
+async function refreshSkillTreeSilently() {
+  try {
+    await loadSkillTree();
+  } catch (err) {
+    showTransientStatus(`目录刷新失败：${err.message || '未知错误'}`);
+  }
+}
+
+function renderActionModal() {
+  const modal = $('action-modal');
+  const body = $('action-modal-body');
+  const title = $('action-modal-title');
+  const subtitle = $('action-modal-subtitle');
+  const action = getSidebarActionMeta();
+  const routeLabel = getOpenRouterRouteLabel();
+
+  title.textContent = action.title;
+  subtitle.textContent = action.subtitle;
+
+  if (action.id === 'batch-ask') {
+    const configuredModels = getBatchAskModels();
+    const selectedModels = getSelectedBatchAskModels();
+    const feedbackClass = batchAskState.feedbackType === 'error'
+      ? 'batch-ask-feedback error'
+      : 'batch-ask-feedback';
+    const feedbackHtml = batchAskState.running
+      ? `<div class="loading-row"><div class="spinner"></div> 正在通过 ${escHtml(routeLabel)} 调用 OpenRouter，请稍候…</div>`
+      : escHtml(batchAskState.feedback || '');
+
+    body.innerHTML = `
+      <div class="batch-ask-layout">
+        <div class="batch-ask-form-pane">
+          <section class="batch-ask-section">
+            <div class="batch-ask-label">问题</div>
+            <textarea id="batch-ask-question" placeholder="输入一个需要同时交给多个模型回答的问题"></textarea>
+          </section>
+          <section class="batch-ask-section">
+            <div class="batch-ask-label">本次调用模型</div>
+            ${configuredModels.length ? `
+              <div class="batch-ask-model-choice-list">
+                ${configuredModels.map(model => `
+                  <label class="batch-ask-model-option${selectedModels.includes(model) ? ' checked' : ''}">
+                    <input
+                      type="checkbox"
+                      value="${escHtml(model)}"
+                      data-batch-ask-model-toggle
+                      ${selectedModels.includes(model) ? 'checked' : ''}
+                    >
+                    <span>${escHtml(model)}</span>
+                  </label>
+                `).join('')}
+              </div>
+            ` : '<div class="batch-ask-model-empty">先去右上角设置里添加可用模型。</div>'}
+          </section>
+          <div class="batch-ask-runbar">
+            <button id="btn-batch-ask-run" type="button"${batchAskState.running ? ' disabled' : ''}>${batchAskState.running ? '调用中…' : '开始 Batch Ask'}</button>
+          </div>
+          <div class="${feedbackClass}">${feedbackHtml}</div>
+        </div>
+        <div class="batch-ask-results-pane">
+          ${renderBatchAskResults()}
+        </div>
+      </div>
+    `;
+
+    const questionEl = $('batch-ask-question');
+    questionEl.value = batchAskState.draftQuestion;
+    questionEl.focus({ preventScroll: true });
+    questionEl.addEventListener('input', () => {
+      batchAskState.draftQuestion = questionEl.value;
+    });
+    body.querySelectorAll('[data-batch-ask-model-toggle]').forEach(input => {
+      input.addEventListener('change', () => {
+        const next = [...body.querySelectorAll('[data-batch-ask-model-toggle]:checked')]
+          .map(el => el.value);
+        saveSelectedBatchAskModels(next);
+        renderActionModal();
+      });
+    });
+    $('btn-batch-ask-run').addEventListener('click', submitBatchAsk);
+  } else {
+    body.innerHTML = '<div class="action-placeholder">Search Skills 入口已预留。后续会在这里接入 Skill 搜索、筛选和发现能力。</div>';
+  }
+
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function isActionModalOpen() {
+  return $('action-modal').classList.contains('open');
+}
+
+function resetBatchAskPresentationState() {
+  batchAskState.lastRun = null;
+  batchAskState.feedback = '';
+  batchAskState.feedbackType = 'info';
+}
+
+function closeActionModal() {
+  $('action-modal').classList.remove('open');
+  $('action-modal').setAttribute('aria-hidden', 'true');
+  if (batchAskState.actionId === 'batch-ask') {
+    resetBatchAskPresentationState();
+  }
+  refreshSkillTreeSilently();
+}
+
+async function submitBatchAsk() {
+  const question = String(batchAskState.draftQuestion || '').trim();
+  const models = getSelectedBatchAskModels();
+  const gatewaySettings = getOpenRouterGatewaySettings();
+
+  if (!question) {
+    batchAskState.feedback = '请先输入问题。';
+    batchAskState.feedbackType = 'error';
+    renderActionModal();
+    return;
+  }
+  if (!models.length) {
+    batchAskState.feedback = '请先在弹窗里勾选至少一个要调用的模型。';
+    batchAskState.feedbackType = 'error';
+    renderActionModal();
+    return;
+  }
+
+  batchAskState.running = true;
+  batchAskState.feedback = `准备通过 ${getOpenRouterRouteLabel(gatewaySettings)} 调用 ${models.length} 个模型…`;
+  batchAskState.feedbackType = 'info';
+  renderActionModal();
+
+  try {
+    const data = await fetchJson('/api/batch-ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        question,
+        models,
+        gatewayEnabled: gatewaySettings.enabled,
+      }),
+    });
+    batchAskState.draftQuestion = '';
+    if (isActionModalOpen()) {
+      batchAskState.lastRun = data;
+      batchAskState.feedback = `已写入 ${data.directory}`;
+      batchAskState.feedbackType = 'info';
+    } else {
+      resetBatchAskPresentationState();
+    }
+    await refreshSkillTreeSilently();
+  } catch (err) {
+    if (isActionModalOpen()) {
+      batchAskState.feedback = err.message || 'Batch Ask 失败';
+      batchAskState.feedbackType = 'error';
+    } else {
+      resetBatchAskPresentationState();
+    }
+  } finally {
+    batchAskState.running = false;
+    if (isActionModalOpen()) renderActionModal();
+  }
+}
+
+function initSidebarActionDock() {
+  const dock = $('sidebar-action-dock');
+  const trigger = $('btn-sidebar-action');
+  const switchBtn = $('btn-sidebar-action-switch');
+  const modal = $('action-modal');
+
+  renderSidebarActionDock();
+
+  trigger.addEventListener('click', () => {
+    closeSidebarActionMenu();
+    renderActionModal();
+  });
+
+  switchBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = $('sidebar-action-menu').classList.toggle('open');
+    switchBtn.classList.toggle('active', open);
+    switchBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+
+  document.addEventListener('click', e => {
+    if (!dock.contains(e.target)) closeSidebarActionMenu();
+  });
+
+  $('btn-action-modal-close').addEventListener('click', closeActionModal);
+  modal.addEventListener('click', e => {
+    if (e.target === modal) closeActionModal();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      closeSidebarActionMenu();
+      closeActionModal();
+    }
+  });
+}
+
+function renderWelcome() {
+  S.activeFile = null;
+  S.blocks = [];
+  S.activeId = null;
+  $('topbar-file').textContent = '';
+  $('topbar-file').style.display = 'none';
+  hideSelectionAction(true);
+  $('content').innerHTML = `
+    <div class="content-state">
+      <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#30363d" stroke-width="1.2">
+        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+      </svg>
+      <h2>选择一个 Markdown 文档</h2>
+      <p>从左侧目录中点击任意文件开始阅读与解读</p>
+    </div>`;
+}
+
+function renderInitError(message) {
+  S.activeFile = null;
+  S.blocks = [];
+  S.activeId = null;
+  $('topbar-file').textContent = '';
+  $('topbar-file').style.display = 'none';
+  hideSelectionAction(true);
+  $('content').innerHTML = `
+    <div class="content-state">
+      <h2>初始化失败</h2>
+      <p>${escHtml(message)}</p>
+    </div>`;
+}
+
+function easeInOutCubic(t) {
+  return t < 0.5
+    ? 4 * t * t * t
+    : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function smoothScrollAnalysisCard(card) {
+  const pane = $('analysis-pane');
+  if (!pane || !card) return;
+
+  if (S.analysisScrollRaf) {
+    cancelAnimationFrame(S.analysisScrollRaf);
+    S.analysisScrollRaf = 0;
+  }
+
+  const paneRect = pane.getBoundingClientRect();
+  const cardRect = card.getBoundingClientRect();
+  const rawTargetTop =
+    pane.scrollTop +
+    cardRect.top -
+    paneRect.top -
+    (pane.clientHeight - cardRect.height) / 2;
+  const maxTop = Math.max(0, pane.scrollHeight - pane.clientHeight);
+  const targetTop = Math.max(0, Math.min(maxTop, rawTargetTop));
+  const startTop = pane.scrollTop;
+  const delta = targetTop - startTop;
+
+  if (Math.abs(delta) < 2) {
+    pane.scrollTop = targetTop;
+    return;
+  }
+
+  const duration = Math.max(220, Math.min(420, Math.abs(delta) * 0.6));
+  const startedAt = performance.now();
+
+  const tick = now => {
+    const progress = Math.min(1, (now - startedAt) / duration);
+    const eased = easeInOutCubic(progress);
+    pane.scrollTop = startTop + delta * eased;
+
+    if (progress < 1) {
+      S.analysisScrollRaf = requestAnimationFrame(tick);
+    } else {
+      pane.scrollTop = targetTop;
+      S.analysisScrollRaf = 0;
+    }
+  };
+
+  S.analysisScrollRaf = requestAnimationFrame(tick);
+}
+
+function badgeInfo(type) {
+  return {
+    frontmatter: { cls: 'badge-meta',  label: 'META' },
+    h1:          { cls: 'badge-h1',    label: 'H1'   },
+    h2:          { cls: 'badge-h2',    label: 'H2'   },
+    text:        { cls: 'badge-text',  label: 'INTRO'},
+  }[type] || { cls: 'badge-text', label: type.toUpperCase() };
+}
+
+function renderMd(text) {
+  return marked.parse(text || '');
+}
+
+function renderBlockContent(block) {
+  if (block.type === 'frontmatter') {
+    const lines = block.content.split('\n').map(l => {
+      const colon = l.indexOf(':');
+      if (colon > 0 && !l.startsWith('-') && !l.startsWith('#')) {
+        const k = l.slice(0, colon).replace(/^---/, '').trim();
+        const v = l.slice(colon + 1).trim();
+        return `<div style="display:flex;gap:8px;padding:2px 0">
+          <span style="color:var(--text-muted);min-width:80px">${k}</span>
+          <span style="color:var(--text)">${v}</span>
+        </div>`;
+      }
+      return '';
+    }).filter(Boolean).join('');
+    return `<div style="font-family:monospace;font-size:12.5px;line-height:1.9">${lines}</div>`;
+  }
+  return renderMd(block.content);
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function bookmarkIcon() {
+  return `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 1.75A1.75 1.75 0 0 1 5.75 0h4.5A1.75 1.75 0 0 1 12 1.75V14l-4-2.5L4 14V1.75z"/></svg>`;
+}
+
+function syncBookmarkButton(btn, bookmarked) {
+  if (!btn) return;
+  btn.innerHTML = bookmarkIcon();
+  btn.classList.toggle('starred', bookmarked);
+  btn.title = bookmarked ? '取消收藏' : '收藏';
+  btn.setAttribute('aria-pressed', bookmarked ? 'true' : 'false');
+}
+
+function renderAnalysisStreaming(el, text, force = false) {
+  const regen = force
+    ? '<div class="regen-bar"><div class="spinner"></div> 重新生成中…</div>'
+    : '';
+  setMemoHostHtml(el, `${regen}<pre style="white-space:pre-wrap;font-family:inherit;font-size:13px">${escHtml(text)}</pre><span class="cursor"></span>`);
+}
+
+function renderAnalysisError(el, message, previousHtml = '') {
+  const safeMessage = escHtml(message || '生成失败');
+  if (previousHtml) {
+    setMemoHostHtml(el, `<div class="regen-bar error">${safeMessage}</div>${previousHtml}`);
+    return;
+  }
+  setMemoHostHtml(el, `<span style="color:#f85149;font-size:12px">${safeMessage}</span>`);
+}
+
+function setStatus(html) {
+  $('topbar-status').innerHTML = html;
+}
+
+// ── Settings & theme ───────────────────────────────────────
+function getExtraPrompt() {
+  const stored = localStorage.getItem('sr_extra_prompt');
+  return stored !== null ? stored : '不要使用emoji';
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('sr_theme', theme);
+  document.querySelectorAll('.tseg-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.t === theme);
+  });
+}
+
+function initSettings() {
+  const saved = localStorage.getItem('sr_theme') || 'dark';
+  applyTheme(saved);
+
+  const btn   = $('btn-settings');
+  const panel = $('settings-panel');
+  const backdrop = $('settings-backdrop');
+  const closeBtn = $('btn-settings-close');
+
+  const syncSettingsOpenState = open => {
+    panel.classList.toggle('open', open);
+    panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+    backdrop.classList.toggle('open', open);
+    backdrop.setAttribute('aria-hidden', open ? 'false' : 'true');
+    btn.classList.toggle('active', open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+
+  closeSettingsDrawer = () => syncSettingsOpenState(false);
+  const toggleSettings = () => {
+    const nextOpen = !panel.classList.contains('open');
+    if (nextOpen) closeMemoDrawer();
+    syncSettingsOpenState(nextOpen);
+  };
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    toggleSettings();
+  });
+
+  closeBtn?.addEventListener('click', closeSettingsDrawer);
+  backdrop?.addEventListener('click', closeSettingsDrawer);
+
+  document.addEventListener('click', e => {
+    if (!panel.classList.contains('open')) return;
+    const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+    if (path.includes(panel) || path.includes(btn)) return;
+    closeSettingsDrawer();
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeSettingsDrawer();
+  });
+
+  document.querySelectorAll('.tseg-btn').forEach(b => {
+    b.addEventListener('click', () => applyTheme(b.dataset.t));
+  });
+
+  const rootsTa = $('scan-roots');
+  let rootsSnapshot = getScanRoots().join('\n');
+  rootsTa.value = rootsSnapshot;
+  rootsTa.addEventListener('change', async () => {
+    const normalized = normalizeScanRoots(rootsTa.value);
+    const nextValue = normalized.join('\n');
+    rootsTa.value = nextValue;
+    if (nextValue === rootsSnapshot) return;
+
+    saveScanRoots(normalized);
+    rootsSnapshot = nextValue;
+    try {
+      await loadSkillTree();
+    } catch (err) {
+      $('skill-tree').innerHTML = '<div style="padding:14px 16px;font-size:12px;color:#f85149">加载失败，请刷新重试</div>';
+      renderInitError(err.message || '未知错误');
+    }
+  });
+
+  const gatewayEnabled = $('gateway-enabled');
+  renderOpenRouterGatewaySettings();
+
+  gatewayEnabled?.addEventListener('change', async () => {
+    saveOpenRouterGatewaySettings({ enabled: gatewayEnabled.checked });
+    renderOpenRouterGatewaySettings();
+    renderBatchAskModelManager();
+    await loadOpenRouterModels({ forceRefresh: true, silent: true });
+  });
+
+  renderBatchAskModelManager();
+  loadOpenRouterModels({ silent: true });
+
+  const ta = $('extra-prompt');
+  ta.value = getExtraPrompt();
+  ta.addEventListener('input', () => localStorage.setItem('sr_extra_prompt', ta.value));
+}
+
+// ── Bookmarks ──────────────────────────────────────────────
+function loadBookmarks() {
+  try {
+    const bms = JSON.parse(localStorage.getItem('sr_bookmarks') || '[]');
+    // Migrate old format (plain numeric id) to composite key filePath::blockId
+    let dirty = false;
+    for (const bm of bms) {
+      if (!String(bm.id).includes('::')) {
+        bm.id = `${bm.filePath}::${bm.blockId}`;
+        dirty = true;
+      }
+    }
+    if (dirty) localStorage.setItem('sr_bookmarks', JSON.stringify(bms));
+    return bms;
+  } catch { return []; }
+}
+
+function saveBookmarks(bms) {
+  localStorage.setItem('sr_bookmarks', JSON.stringify(bms));
+  updateBmCount();
+  renderBookmarksList();
+}
+
+function updateBmCount() {
+  const bms = loadBookmarks();
+  const el = $('bm-count');
+  if (el) el.textContent = bms.length > 0 ? String(bms.length) : '';
+}
+
+function isBookmarked(blockId, filePath) {
+  const key = `${filePath}::${blockId}`;
+  return loadBookmarks().some(b => b.id === key);
+}
+
+function toggleBookmark(block, filePath) {
+  const key = `${filePath}::${block.id}`;
+  const bms = loadBookmarks();
+  const idx = bms.findIndex(b => b.id === key);
+  if (idx >= 0) {
+    bms.splice(idx, 1);
+  } else {
+    const skillName = getSkillName(filePath);
+    bms.push({
+      id: key,
+      filePath,
+      blockId: block.id,
+      heading: block.heading,
+      type: block.type,
+      skillName,
+      content: (block.content || '').slice(0, 200),
+    });
+  }
+  saveBookmarks(bms);
+  const nowBookmarked = idx < 0;
+  const btn = document.querySelector(`.btn-star[data-id="${key}"]`);
+  syncBookmarkButton(btn, nowBookmarked);
+}
+
+function renderBookmarksList() {
+  const container = $('bookmarks-list');
+  if (!container) return;
+  const bms = loadBookmarks();
+  if (!bms.length) {
+    container.innerHTML = '<div class="bm-empty">暂无收藏</div>';
+    return;
+  }
+  // Group by skillName
+  const groups = {};
+  for (const bm of bms) {
+    if (!groups[bm.skillName]) groups[bm.skillName] = [];
+    groups[bm.skillName].push(bm);
+  }
+  container.innerHTML = '';
+  for (const [skillName, items] of Object.entries(groups)) {
+    const groupEl = document.createElement('div');
+    groupEl.className = 'bm-group';
+    const hdr = document.createElement('div');
+    hdr.className = 'bm-group-header';
+    hdr.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="flex-shrink:0"><path d="M1.75 1A1.75 1.75 0 000 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0016 13.25v-8.5A1.75 1.75 0 0014.25 3H7.5a.25.25 0 01-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75z"/></svg><span>${escHtml(skillName)}</span>`;
+    groupEl.appendChild(hdr);
+    for (const bm of items) {
+      const bi = badgeInfo(bm.type);
+      const itemEl = document.createElement('div');
+      itemEl.className = 'bm-item';
+      itemEl.innerHTML = `<span class="bm-item-label">${escHtml(bm.heading)}</span><span class="badge ${bi.cls}" style="font-size:9px">${bi.label}</span><button class="bm-del" title="删除收藏" data-id="${bm.id}">×</button>`;
+      itemEl.addEventListener('click', (e) => {
+        if (e.target.classList.contains('bm-del')) return;
+        openBookmark(bm);
+      });
+      itemEl.querySelector('.bm-del').addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeBookmark(bm.id);
+      });
+      groupEl.appendChild(itemEl);
+    }
+    container.appendChild(groupEl);
+  }
+}
+
+function removeBookmark(id) {
+  const bms = loadBookmarks().filter(b => b.id !== id);
+  saveBookmarks(bms);
+  // Update star if visible
+  const btn = document.querySelector(`.btn-star[data-id="${id}"]`);
+  syncBookmarkButton(btn, false);
+}
+
+async function openBookmark(bm) {
+  // Switch to tree tab to show file opening, then scroll
+  const treeFileEl = document.querySelector(`.tree-file[data-path="${CSS.escape(bm.filePath)}"]`);
+  await openFile(bm.filePath, treeFileEl || createFakeTreeEl(bm.filePath));
+  // After render, scroll to block
+  setTimeout(() => {
+    const blockEl = document.getElementById(`block-${bm.blockId}`);
+    if (blockEl) blockEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 300);
+}
+
+function createFakeTreeEl(filePath) {
+  // Fallback element if tree item not found
+  const el = document.createElement('div');
+  el.className = 'tree-file';
+  el.dataset.path = filePath;
+  return el;
+}
+
+// ── Sidebar tabs ───────────────────────────────────────────
+function initSidebarTabs() {
+  document.querySelectorAll('.stab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const tab = btn.dataset.tab;
+      $('tab-tree').style.display = tab === 'tree' ? 'flex' : 'none';
+      $('tab-bookmarks').style.display = tab === 'bookmarks' ? 'flex' : 'none';
+      if (tab === 'bookmarks') renderBookmarksList();
+    });
+  });
+  // Make tab-tree flex column
+  $('tab-tree').style.flexDirection = 'column';
+  $('tab-bookmarks').style.flexDirection = 'column';
+}
+
+// ── Tree rendering ─────────────────────────────────────────
+function buildTree(items, container) {
+  for (const item of items) {
+    if (item.type === 'dir') {
+      const wrap = document.createElement('div');
+      wrap.className = 'tree-dir';
+      wrap.dataset.path = item.path;
+
+      const hdr = document.createElement('div');
+      hdr.className = 'tree-dir-header';
+      hdr.innerHTML = `
+        <span class="chevron">▾</span>
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="#e3b341">
+          <path d="M1.75 1A1.75 1.75 0 000 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0016 13.25v-8.5A1.75 1.75 0 0014.25 3H7.5a.25.25 0 01-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75z"/>
+        </svg>
+        <span>${item.name}</span>`;
+
+      const children = document.createElement('div');
+      children.className = 'tree-dir-children';
+      const isCollapsed = collapsedDirPaths.has(item.path);
+      wrap.classList.toggle('collapsed', isCollapsed);
+      children.classList.toggle('hidden', isCollapsed);
+
+      hdr.addEventListener('click', () => {
+        const col = wrap.classList.toggle('collapsed');
+        children.classList.toggle('hidden', col);
+        setDirCollapsed(item.path, col);
+      });
+
+      buildTree(item.children, children);
+      wrap.appendChild(hdr);
+      wrap.appendChild(children);
+      container.appendChild(wrap);
+    } else {
+      const el = document.createElement('div');
+      el.className = 'tree-file' + (getAnalyzedFiles().has(item.path) ? ' analyzed' : '');
+      el.dataset.path = item.path;
+      el.innerHTML = `
+        <svg width="13" height="13" viewBox="0 0 16 16" class="file-icon">
+          <path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0113.25 16h-9.5A1.75 1.75 0 012 14.25V1.75zm1.75-.25a.25.25 0 00-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 00.25-.25V6h-2.75A1.75 1.75 0 019 4.25V1.5zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.013-.011-2.914-2.914-.011-.013z"/>
+        </svg>
+        <span class="tree-file-name">${item.name}</span>
+        <span class="file-status"></span>`;
+      el.addEventListener('click', () => openFile(item.path, el));
+      container.appendChild(el);
+    }
+  }
+}
+
+// ── Open file ──────────────────────────────────────────────
+async function openFile(filePath, el) {
+  document.querySelectorAll('.tree-file.active').forEach(e => e.classList.remove('active'));
+  if (el) el.classList.add('active');
+  hideSelectionAction(true);
+
+  S.activeFile = filePath;
+  S.blocks = [];
+  S.activeId = null;
+
+  localStorage.setItem('sr_currentFile', filePath);
+
+  const content = $('content');
+  content.innerHTML = `<div style="flex:1;display:flex;align-items:center;justify-content:center;gap:10px;color:var(--text-muted)">
+    <div class="spinner"></div> 正在加载文档…
+  </div>`;
+
+  const topFile = $('topbar-file');
+  topFile.textContent = filePath;
+  topFile.style.display = 'block';
+
+  const params = createRootsSearchParams({ path: filePath });
+  const res = await fetch(`/api/skill?${params.toString()}`);
+  if (!res.ok) {
+    content.innerHTML = `<div style="flex:1;display:flex;align-items:center;justify-content:center;color:#f85149">加载失败: ${(await res.json()).error}</div>`;
+    return;
+  }
+
+  const { blocks, analyses } = await res.json();
+  S.blocks = blocks;
+
+  // Merge server-cached analyses into per-file store (don't overwrite in-memory background results)
+  if (!allAnalyses[filePath]) allAnalyses[filePath] = {};
+  Object.assign(allAnalyses[filePath], analyses || {});
+
+  renderSkill(filePath, blocks);
+
+  // Only start analysis if not already running for this file
+  if (!analyzingFiles.has(filePath)) {
+    loadAnalysesSequentially(filePath, blocks);
+  }
+}
+
+// ── Render skill layout ───────────────────────────────────
+function renderSkill(filePath, blocks) {
+  const skillName = getSkillName(filePath);
+
+  $('content').innerHTML = `
+    <div id="panes">
+      <div id="blocks-pane">
+        <div class="skill-heading">
+          <h1>${skillName}</h1>
+          <div class="fp">${filePath}</div>
+        </div>
+        <div id="blocks-list"></div>
+      </div>
+      <div id="analysis-pane">
+        <div class="analysis-header">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 8v4M12 16h.01"/>
+          </svg>
+          AI 解读
+        </div>
+        <div id="analysis-list"></div>
+      </div>
+    </div>`;
+
+  const blocksList = $('blocks-list');
+  const analysisList = $('analysis-list');
+
+  for (const block of blocks) {
+    const bi = badgeInfo(block.type);
+    const starred = isBookmarked(block.id, filePath);
+
+    // — Block card
+    const blockEl = document.createElement('div');
+    blockEl.className = 'block';
+    blockEl.id = `block-${block.id}`;
+    blockEl.innerHTML = `
+      <div class="block-bar">
+        <span class="badge ${bi.cls}">${bi.label}</span>
+        <span>${block.heading}</span>
+        <button class="btn-star${starred ? ' starred' : ''}" data-id="${filePath}::${block.id}" title="${starred ? '取消收藏' : '收藏'}" aria-pressed="${starred ? 'true' : 'false'}">${bookmarkIcon()}</button>
+      </div>
+      <div
+        class="block-body"
+        data-source-zone="skill"
+        data-file-path="${escHtml(filePath)}"
+        data-block-id="${block.id}"
+        data-block-type="${escHtml(block.type)}"
+        data-heading="${escHtml(block.heading)}"
+      >${renderBlockContent(block)}</div>`;
+
+    blockEl.querySelector('.btn-star').addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleBookmark(block, filePath);
+    });
+
+    const blockBodyEl = blockEl.querySelector('.block-body');
+    memoHostHtml.set(blockBodyEl, blockBodyEl.innerHTML);
+
+    blockEl.addEventListener('mouseenter', () => activateBlock(block.id));
+    blockEl.addEventListener('mouseleave', deactivateBlock);
+    blocksList.appendChild(blockEl);
+
+    // — Analysis card
+    const aEl = document.createElement('div');
+    aEl.className = 'analysis-card';
+    aEl.id = `analysis-${block.id}`;
+
+    const cached = (allAnalyses[filePath] || {})[String(block.id)];
+    aEl.innerHTML = `
+      <div class="analysis-card-bar">
+        <span class="badge ${bi.cls}">${bi.label}</span>
+        <span class="analysis-card-label">${block.heading}</span>
+        ${cached ? `<button class="btn-refresh" data-id="${filePath}::${block.id}" title="重新生成">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1.5 8a6.5 6.5 0 1 0 1.1-3.6"/>
+            <polyline points="1.5 2 1.5 5.5 5 5.5"/>
+          </svg>
+        </button>` : ''}
+      </div>
+      <div
+        class="analysis-body"
+        id="abody-${block.id}"
+        data-source-zone="analysis"
+        data-file-path="${escHtml(filePath)}"
+        data-block-id="${block.id}"
+        data-block-type="${escHtml(block.type)}"
+        data-heading="${escHtml(block.heading)}"
+      >
+        ${cached
+          ? renderMd(cached)
+          : '<div class="loading-row"><div class="spinner"></div> 解读中…</div>'}
+      </div>`;
+    aEl.querySelector('.btn-refresh')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      reAnalyzeBlock(filePath, block);
+    });
+    const analysisBodyEl = aEl.querySelector('.analysis-body');
+    memoHostHtml.set(analysisBodyEl, analysisBodyEl.innerHTML);
+    analysisList.appendChild(aEl);
+  }
+
+  applyMemoHighlights();
+}
+
+// ── Hover activation ───────────────────────────────────────
+function activateBlock(id) {
+  deactivateBlock();
+  S.activeId = id;
+  document.getElementById(`block-${id}`)?.classList.add('active');
+  const aCard = document.getElementById(`analysis-${id}`);
+  if (aCard) {
+    aCard.classList.add('active');
+    smoothScrollAnalysisCard(aCard);
+  }
+}
+
+function deactivateBlock() {
+  if (S.activeId === null) return;
+  document.getElementById(`block-${S.activeId}`)?.classList.remove('active');
+  document.getElementById(`analysis-${S.activeId}`)?.classList.remove('active');
+  S.activeId = null;
+}
+
+// ── Sequential analysis loading with streaming ────────────
+async function loadAnalysesSequentially(filePath, blocks) {
+  if (analyzingFiles.has(filePath)) return;
+  analyzingFiles.add(filePath);
+
+  const skillName = getSkillName(filePath);
+  const fileCache = allAnalyses[filePath] || (allAnalyses[filePath] = {});
+
+  const needsAnalysis = blocks.some(b => !fileCache[String(b.id)]);
+  if (needsAnalysis) setFileStatus(filePath, `<div class="spinner"></div>`);
+
+  for (const block of blocks) {
+    const cid = String(block.id);
+    if (fileCache[cid]) {
+      const el = $(`abody-${block.id}`);
+      if (el && el.querySelector('.loading-row')) setMemoHostHtml(el, renderMd(fileCache[cid]));
+      continue;
+    }
+    await streamAnalysis(filePath, block, skillName);
+  }
+
+  analyzingFiles.delete(filePath);
+  markFileAnalyzed(filePath);
+  setFileStatus(filePath, '');
+}
+
+async function streamAnalysis(filePath, block, skillName, force = false) {
+  // Always re-query DOM so background streams work when file is re-opened
+  const getEl = () => $(`abody-${block.id}`);
+
+  const initEl = getEl();
+  const previousHtml = force && initEl ? getMemoHostHtml(initEl) : '';
+  if (initEl) {
+    if (force) {
+      setMemoHostHtml(initEl, `<div class="regen-bar"><div class="spinner"></div> 重新生成中…</div>${previousHtml}`);
+    } else {
+      setMemoHostHtml(initEl, '<div class="loading-row"><div class="spinner"></div> 正在生成解读…</div>');
+    }
+  }
+
+  let fullText = '';
+  let finalized = false;
+
+  const finalize = () => {
+    if (finalized) return;
+    finalized = true;
+    if (!allAnalyses[filePath]) allAnalyses[filePath] = {};
+    allAnalyses[filePath][String(block.id)] = fullText;
+    const el = getEl();
+    if (el) setMemoHostHtml(el, renderMd(fullText));
+    // Add refresh button if not already present
+    const card = document.getElementById(`analysis-${block.id}`);
+    if (card && !card.querySelector('.btn-refresh')) {
+      const bar = card.querySelector('.analysis-card-bar');
+      if (bar) {
+        const btn = document.createElement('button');
+        btn.className = 'btn-refresh';
+        btn.dataset.id = `${filePath}::${block.id}`;
+        btn.title = '重新生成';
+        btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 8a6.5 6.5 0 1 0 1.1-3.6"/><polyline points="1.5 2 1.5 5.5 5 5.5"/></svg>`;
+        btn.addEventListener('click', (e) => { e.stopPropagation(); reAnalyzeBlock(filePath, block); });
+        bar.appendChild(btn);
+      }
+    }
+  };
+
+  const fail = message => {
+    const el = getEl();
+    if (!el) return;
+    if (force && previousHtml) {
+      renderAnalysisError(el, `重新生成失败：${message}，已保留旧结果`, previousHtml);
+      return;
+    }
+    renderAnalysisError(el, `生成失败：${message}`);
+  };
+
+  const processLine = line => {
+    if (!line.startsWith('data: ')) return false;
+    let data;
+    try { data = JSON.parse(line.slice(6)); } catch { return false; }
+
+    if (data.error) {
+      fail(data.error);
+      return true;
+    }
+
+    if (data.text) {
+      fullText += data.text;
+      const el = getEl();
+      if (el) renderAnalysisStreaming(el, fullText, force);
+    }
+
+    if (data.done) {
+      if (fullText.trim()) finalize();
+      else fail('未收到生成结果');
+    }
+
+    return false;
+  };
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filePath,
+        roots: getScanRoots(),
+        blockId: block.id,
+        persistKey: block.persistKey,
+        content: block.content,
+        heading: block.heading,
+        skillName,
+        extraPrompt: getExtraPrompt(),
+        force,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      fail(err.error || '请求失败');
+      return;
+    }
+
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const payload = await res.json().catch(() => null);
+      if (payload?.analysis) {
+        fullText = payload.analysis;
+        finalize();
+        return;
+      }
+      fail(payload?.error || '未收到生成结果');
+      return;
+    }
+
+    const reader = res.body?.getReader();
+    if (!reader) {
+      fail('响应流不可用');
+      return;
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (processLine(line)) return;
+      }
+    }
+
+    if (buffer.trim() && processLine(buffer.trim())) return;
+    if (!finalized) {
+      if (fullText.trim()) finalize();
+      else fail('未收到生成结果');
+    }
+  } catch (err) {
+    fail(err.message || '请求失败');
+  }
+}
+
+// ── Analyzed file tracking ─────────────────────────────────
+function setFileStatus(filePath, html) {
+  const el = document.querySelector(`.tree-file[data-path="${CSS.escape(filePath)}"] .file-status`);
+  if (el) el.innerHTML = html;
+}
+
+function setRefreshState(filePath, blockId, busy) {
+  const btn = document.querySelector(`.btn-refresh[data-id="${filePath}::${blockId}"]`);
+  if (!btn) return;
+  btn.disabled = busy;
+  btn.title = busy ? '重新生成中' : '重新生成';
+}
+
+function getAnalyzedFiles() {
+  try { return new Set(JSON.parse(localStorage.getItem('sr_analyzed') || '[]')); }
+  catch { return new Set(); }
+}
+
+function markFileAnalyzed(filePath) {
+  const set = getAnalyzedFiles();
+  if (set.has(filePath)) return;
+  set.add(filePath);
+  localStorage.setItem('sr_analyzed', JSON.stringify([...set]));
+  // Update tree icon live
+  const treeEl = document.querySelector(`.tree-file[data-path="${CSS.escape(filePath)}"]`);
+  if (treeEl) treeEl.classList.add('analyzed');
+}
+
+// ── Re-analyze single block ────────────────────────────────
+async function reAnalyzeBlock(filePath, block) {
+  const key = `${filePath}::${block.id}`;
+  if (regeneratingBlocks.has(key)) return;
+  regeneratingBlocks.add(key);
+
+  const skillName = getSkillName(filePath);
+  setRefreshState(filePath, block.id, true);
+  setFileStatus(filePath, `<div class="spinner"></div>`);
+  try {
+    await streamAnalysis(filePath, block, skillName, true);
+  } finally {
+    regeneratingBlocks.delete(key);
+    setRefreshState(filePath, block.id, false);
+    setFileStatus(filePath, '');
+  }
+}
+
+// ── Boot ───────────────────────────────────────────────────
+async function loadSkillTree() {
+  const treeEl = $('skill-tree');
+  treeEl.innerHTML = '<div class="loading-row" style="padding:14px 16px"><div class="spinner"></div> 加载中…</div>';
+
+  const params = createRootsSearchParams();
+  const res = await fetch(`/api/skills?${params.toString()}`);
+  if (!res.ok) throw new Error(`文档列表加载失败: ${res.status}`);
+
+  const tree = await res.json();
+  treeEl.innerHTML = '';
+
+  if (!tree.length) {
+    treeEl.innerHTML = '<div style="padding:14px 16px;font-size:12px;color:var(--text-muted)">所选目录下没有可解析的 Markdown 文件</div>';
+    localStorage.removeItem('sr_currentFile');
+    renderWelcome();
+    return;
+  }
+
+  buildTree(tree, treeEl);
+
+  const preferredFile = S.activeFile || localStorage.getItem('sr_currentFile');
+  if (preferredFile) {
+    const fileEl = document.querySelector(`.tree-file[data-path="${CSS.escape(preferredFile)}"]`);
+    if (fileEl) {
+      await openFile(preferredFile, fileEl);
+      return;
+    }
+    localStorage.removeItem('sr_currentFile');
+  }
+
+  renderWelcome();
+}
+
+async function init() {
+  initSettings();
+  initMemoPanel();
+  initSidebarTabs();
+  initSidebarActionDock();
+  updateBmCount();
+
+  try {
+    await loadMemos();
+    await loadSkillTree();
+  } catch (err) {
+    $('skill-tree').innerHTML = '<div style="padding:14px 16px;font-size:12px;color:#f85149">加载失败，请刷新重试</div>';
+    renderInitError(err.message || '未知错误');
+  }
+}
+
+init();
+</script>
+</body>
+</html>
